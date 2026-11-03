@@ -35,7 +35,7 @@ static uint32_t g_ini_t0, g_ini_n;
 /* for the diagnostic overlay: what each kind of crackle would leave behind */
 #define DIAG_CLICK_DELTA 16000       /* a jump this big between two output samples is a click, not sound */
 #define DIAG_LATE_MS     200         /* without a poll for this long, the audio buffers (240 ms) ran dry or nearly so */
-static unsigned g_diag_clip, g_diag_click, g_diag_rom, g_diag_late, g_diag_rom_len;
+static unsigned g_diag_clip, g_diag_click, g_diag_rom, g_diag_late;
 static int g_diag_prev;
 static uint32_t g_diag_poll_t;
 void gta2_n64_audio_status(unsigned *clip, unsigned *click, unsigned *rom, unsigned *late)
@@ -140,7 +140,6 @@ static void wave_read(void *ctx, samplebuffer_t *sbuf, int wpos, int wlen, bool 
         const uint8_t *src = w->data + off;
 #if N64_DEBUG_OVERLAY
         ++g_diag_rom;
-        if (w->len > g_diag_rom_len) g_diag_rom_len = w->len;
 #endif
         if (in_rom(src) && (((uintptr_t)src ^ (uintptr_t)dst) & 1u) == 0u)
             dma_read(dst, (uint32_t)((uintptr_t)src & 0x1FFFFFFFu), have); /* waits for the PI and reads via DMA */
@@ -351,19 +350,6 @@ static void voice_fade_out(int ch)
     g_voice[ch].fading = 1;
     g_voice[ch].fade_end = g_mixed + SFX_DECLICK;
 }
-
-#if N64_DEBUG_OVERLAY
-/* largest sound read from ROM since the last call, voices playing now, KB of sounds in RAM */
-void gta2_n64_audio_detail(unsigned *rom_kb, unsigned *voices, unsigned *pool_kb)
-{
-    *rom_kb = (g_diag_rom_len + 1023u) / 1024u;
-    g_diag_rom_len = 0;
-    unsigned n = 0;
-    for (int c = 0; c < NVOICE; ++c) if (mixer_ch_playing(c)) ++n;
-    *voices = n;
-    *pool_kb = g_fxcache_bytes / 1024u;
-}
-#endif
 
 /* feeds the AI: called a few times per frame (render_n64.c) */
 void gta2_n64_audio_poll(void)

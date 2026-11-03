@@ -957,21 +957,7 @@ void gta2_n64_present(const void *cmds_, int cmdCount, const void *verts_, int v
             }
             s_big_kb = lo;
         }
-        extern void gta2_alloc_census_restart(void), gta2_alloc_census_text(char *out, size_t size, int lines); /* alloc_census_n64.cpp */
-        extern int gta2_game_in_menu(void); /* game_entry.cpp */
-        static int s_census_in_menu = 1;
-        static char s_census[192];
-        static unsigned s_rom_kb, s_voices, s_pool_kb;
-        const int census_in_menu = gta2_game_in_menu();
-        if (s_census_in_menu && !census_in_menu) gta2_alloc_census_restart();
-        s_census_in_menu = census_in_menu;
-        if ((g_frames % PROF_FRAMES) == 0) {
-            extern void gta2_n64_audio_detail(unsigned *rom_kb, unsigned *voices, unsigned *pool_kb); /* audio_n64.c */
-            gta2_alloc_census_text(s_census, sizeof(s_census), 6);
-            gta2_n64_audio_detail(&s_rom_kb, &s_voices, &s_pool_kb);
-        }
         rdpq_set_mode_standard();
-        rdpq_text_printf(NULL, gta2_n64_debug_font(), 165, 70, "rom%uK v%u pool%uK\n%s", s_rom_kb, s_voices, s_pool_kb, s_census);
         extern void gta2_ramfs_status(int *flash, int *files, int *dirty, int *stored, int *failed, unsigned *lastSize, unsigned *lastPacked, unsigned *used); /* ramfs_n64.cpp */
         extern void gta2_n64_audio_status(unsigned *clip, unsigned *click, unsigned *rom, unsigned *late); /* audio_n64.c */
         extern uint32_t gta2_frame_dropped(void); /* frame_n64.cpp */

@@ -38,7 +38,7 @@ STAGE_FLAGS = $(if $(MAPS),--maps "$(MAPS)") $(if $(BONUS),--bonus "$(BONUS)") $
 
 ENGINE := $(shell tr -d '\r' < src/game_srcs.txt)
 ENGINE += registry crt_stubs port_static_init
-PLAT   := win32_n64 dinput_n64 crt_n64 settings_n64 miles_n64 bink_n64 gbh_n64 vid_n64 frame_n64 exports_n64 net_n64 n64_extra game_entry ramfs_n64 alloc_census_n64
+PLAT   := win32_n64 dinput_n64 crt_n64 settings_n64 miles_n64 bink_n64 gbh_n64 vid_n64 frame_n64 exports_n64 net_n64 n64_extra game_entry ramfs_n64
 
 ENGINE_OBJS := $(addprefix $(OBJ_DIR)/src/gta2_re/Source/,$(addsuffix .o,$(ENGINE)))
 PLAT_OBJS   := $(addprefix $(OBJ_DIR)/src/n64/,$(addsuffix .o,$(PLAT)))
@@ -102,10 +102,6 @@ $(BUILD_DIR)/$(ROM_NAME).dfs: stage-data $(LOGO_SPRITES)
 	$(N64_MKDFS) $@ $(FS_DIR)
 
 $(BUILD_DIR)/$(ROM_NAME).elf: N64_LDFLAGS += $(EXTRA_LDFLAGS)
-# Debug ROMs: the overlay shows who allocates memory (src/n64/alloc_census_n64.cpp).
-ifneq (,$(findstring N64_DEBUG_OVERLAY=1,$(EXTRA_CFLAGS)))
-$(BUILD_DIR)/$(ROM_NAME).elf: N64_LDFLAGS += --wrap=malloc --wrap=calloc --wrap=realloc --wrap=memalign --wrap=free --wrap=_Znwj --wrap=_Znaj
-endif
 $(BUILD_DIR)/$(ROM_NAME).elf: $(OBJS)
 
 -include $(OBJS:.o=.d)

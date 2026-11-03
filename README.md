@@ -108,7 +108,7 @@ Compile-time tuning, passed as `EXTRA_CFLAGS="-DNAME=value ..."`. These require 
 | `N64_CAM_ZOOM_QUALITY_PCT` | `116` | Camera height in quality mode. Higher = closer to the ground and faster |
 | `N64_CAM_ZOOM_PERF_PCT` | `126` | Camera height in performance mode |
 | `N64_KF_PED_PCT` | `100` | Pedestrians during a kill frenzy, as a percentage of the PC amount. Otherwise chosen on the Options page: pedestrians 35 / 40 / 50%, traffic 40 / 50 / 60% |
-| `N64_DEBUG_OVERLAY` | `0` | `1` shows FPS, free RAM, the save system, the pedestrian counts, the sound counters and the frame counters (`skip`: frames with no image; `low`: game frames with almost nothing; `long`: gaps of 0.5 s or more) on screen. A column on the right lists the code that allocated the most memory since the level started: address, times, KB still held, largest KB at once |
+| `N64_DEBUG_OVERLAY` | `0` | `1` shows FPS, free RAM, the save system, the pedestrian counts, the sound counters and the frame counters (`skip`: frames with no image; `low`: game frames with almost nothing; `long`: gaps of 0.5 s or more) on screen |
 | `N64_HUD_SCALE` | `1.25f` | Size of the HUD markers: bars, hearts, money, wanted level (`1.0f` = as on PC) |
 | `N64_PAGER_SCALE` | `1.5f` | Size of the pagers: mission clock and counter (`1.0f` = as on PC) |
 | `N64_HUD_INSET_LEFT` / `_RIGHT` / `_TOP` | `8.0f` / `16.0f` / `6.0f` | Distance of the HUD markers from the screen edges |
