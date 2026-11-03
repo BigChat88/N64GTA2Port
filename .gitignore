@@ -1,0 +1,78 @@
+# --- build output ---
+build/
+*.z64
+*.v64
+*.n64
+*.dfs
+*.elf
+*.bin
+*.o
+*.d
+*.map
+*.sym
+*.stripped
+*.sprite
+output/*
+!output/README.md
+
+# --- emulator save files ---
+*.flash
+*.eeprom
+*.ram
+*.sra
+*.mpk
+
+# --- copyrighted game data: never commit ---
+# Bring your own GTA 2 files; see gamedata/README.md.
+gamedata/*
+!gamedata/.gitkeep
+!gamedata/README.md
+*.wav
+*.wav64
+*.gxt
+*.sty
+*.gmp
+*.scr
+*.raw
+*.sdt
+*.tga
+*.bik
+*.gci
+*.seq
+*.rep
+*.m1v
+
+# --- engine downloaded by setup_engine.sh (upstream + patch) ---
+src/gta2_re/
+src/compat_ci/
+
+# --- libdragon checked out by tools/fetch_libdragon.sh ---
+libdragon/
+
+# --- prebuilt engine / host tools ARE committed: a clone can build a ROM as is ---
+!tools/vendor/bin/**
+!tools/vendor/engine/**
+hosttools/
+
+# --- python cache ---
+__pycache__/
+*.pyc
+
+# --- working clutter ---
+*.bak*
+*.log
+*_log.txt
+stage/
+
+# --- tests: not part of this repository ---
+test/
+tests/
+*_test.*
+test_*.py
+run_tests.*
+
+# --- local editor / assistant settings ---
+.vscode/
+.idea/
+.claude/
+CLAUDE.md

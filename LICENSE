@@ -1,0 +1,37 @@
+MIT License
+
+Copyright (c) 2026 BigChat88
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+---
+
+Scope: this license covers only this project's own work. It grants no rights
+over the following, which remain subject to their owners' terms:
+
+- Code from other projects, listed in README.md and THIRD_PARTY_NOTICES.md,
+  including the parts of this project derived from them.
+- The gta2_re decompilation (https://github.com/CriminalRETeam/gta2_re).
+  assets/patches/gta2_re_n64.patch modifies it, and only this project's own
+  changes in that patch are covered here.
+- Grand Theft Auto 2, which is property of Rockstar Games / Take-Two
+  Interactive. No original game files, binaries or ROMs are part of this
+  repository.
+- The prebuilt files in tools/vendor/, compiled from gta2_re and libdragon. They
+  hold no game data, and these terms apply to them only for this project's work.

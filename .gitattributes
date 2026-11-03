@@ -1,0 +1,12 @@
+* text=auto eol=lf
+*.patch -text
+*.ps1 text eol=crlf
+*.cmd text eol=crlf
+tools/vendor/bin/*.exe binary
+tools/vendor/bin/n64tool binary
+tools/vendor/bin/mkdfs binary
+tools/vendor/bin/ed64romconfig binary
+tools/vendor/bin/audioconv64 binary
+tools/vendor/engine/*.stripped binary
+tools/vendor/engine/*.sym binary
+tools/vendor/engine/intro/*.sprite binary
