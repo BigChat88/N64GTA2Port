@@ -90,7 +90,7 @@ extern "C" void gta2_settings_load(void)
     gta2_n64_set_fps_limit(s.fpsLimit);
     gta2_n64_set_rumble(s.rumble);
     gta2_n64_set_population(s.population);
-    if ((s.language == 'e' || s.language == 's' || s.language == 'p') && LanguageInRom(s.language))
+    if ((s.language == 'e' || s.language == 's') && LanguageInRom(s.language))
     {
         gN64Language = s.language;
     }

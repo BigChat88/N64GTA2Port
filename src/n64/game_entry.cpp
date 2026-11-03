@@ -44,7 +44,7 @@ void SeedRegistry()
     gta2_port_reg_set_dword("hklm\\software\\freeloader.com\\gta2", "cityinstalled", 2);
     snprintf(path, sizeof(path), "%s\\debug", kRegRoot);
     // N64: opens the original GTA 2 menu by default (the engine picks the map from data\\test1.seq: City 1 = wil, 2 = ste, 3 = bil).
-    // If the player held Z at power-on (main_n64.c), skips the menu and goes straight into the chosen map.
+    // Debug ROMs: if the player held Z at power-on (main_n64.c), skips the menu and goes straight into the chosen map.
     static const char* const kMaps[3] = {"bil", "ste", "wil"};
     const int boot = gta2_n64_boot_map;
     const char* m = (boot >= 0 && boot < 3) ? kMaps[boot] : "bil";

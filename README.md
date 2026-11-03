@@ -41,12 +41,10 @@ All of these come from the `data` folder of your GTA 2 for PC install. Copying t
 | `test1.seq` | Level sequence | Yes |
 | `attract/` | Demo replays | Yes |
 | `keyboard/` | Keyboard layouts | Yes |
-| `frontend/` | Menu screens | Yes, unless built with `--no-frontend` |
+| `frontend/` | Menu screens | Yes |
 | `audio/bil.*`, `ste.*`, `wil.*`, `fstyle.*` (`.raw` + `.sdt`) | Sound banks | Yes |
 | `gtaudio/*.wav` | Radio stations: `1`–`12`, `5a`–`11a` and `101a` | Yes, unless built with fewer radios |
 | `movie/intro.bik` | **Intro movie (FMV).** Converted at build time; needs [ffmpeg](https://ffmpeg.org/) on `PATH` | Optional: without it, or without ffmpeg, the ROM has no intro |
-
-A missing file only prints a warning during the build, but the game may not work without it. `p.gxt` (Brazilian Portuguese text) is not part of the game: the build generates it from `e.gxt` and `assets/lang/pt_br.tsv`.
 
 Run the ROM on a real N64 with an Expansion Pak and a compatible flashcart, or in an accurate emulator such as
 [ares](https://ares-emu.net/) with the Expansion Pak enabled.
@@ -66,8 +64,6 @@ Run the ROM on a real N64 with an Expansion Pak and a compatible flashcart, or i
 | C-up | Enter / exit car. While paused: C-up + C-right + d-pad left together opens the cheat menu | |
 | C-right | Next radio station | |
 | C-down | Special (horn, etc.) | |
-
-Hold **Z** at power-on to skip the menu: `Z` = Industrial (bil), `Z + C-down` = Residential (ste), `Z + C-left` = Downtown (wil).
 
 ## Compile from source
 
@@ -100,7 +96,6 @@ Pass these to `make` or `build.sh`. Most stage options also exist on `tools/pack
 |---|---|
 | `GAME_DATA=/path/to/data` | Where your GTA 2 data is (default `gamedata`) |
 | `MAPS="bil ste wil"` | Cities to include (fewer = smaller ROM). `pack_rom.py --maps` |
-| `INCLUDE_FRONTEND=0` | Leave out the menu screens (saves about 9.6 MB; hold Z at boot to enter a map). `pack_rom.py --no-frontend` |
 | `INCLUDE_INTRO=0` | Leave out the intro movie (saves about 9.5 MB). `pack_rom.py --no-intro`, or `--intro-kbps` to change its quality |
 | `RADIO_RATE=12000` | Radio sample rate in Hz (`8000` = smaller). `pack_rom.py --radio-rate` |
 | `N64_INST=/path` | libdragon install location |
@@ -126,15 +121,6 @@ Compile-time tuning, passed as `EXTRA_CFLAGS="-DNAME=value ..."`. These require 
 | `N64_CACHE_N` | `192` | Converted-texture cache slots (4 KB each) |
 | `N64_HEAP_RESERVE_KB` | `320` | RAM the renderer caches must leave free for the engine |
 
-## Releases and versioning
-
-The version lives in [VERSION](VERSION) and follows `MAJOR.MINOR.PATCH`. To publish a new version, change that file
-and push to `main`.
-
-[.github/workflows/release.yml](.github/workflows/release.yml) compiles the engine and the host tools on every pull
-request as a check. On a push to `main` it also publishes a prerelease tagged `v<VERSION>`, with
-`N64GTA2Port-<VERSION>.zip` attached. That zip holds the project's tracked files, the prebuilt engine, and the
-Windows and Linux host tools. It holds no game data. Pushing again without changing `VERSION` updates the same release.
 
 ## Credits and licensing
 
@@ -146,3 +132,7 @@ Windows and Linux host tools. It holds no game data. Pushing again without chang
 - **N64brew / n64brew2025:** the libdragon logo animation (MIT).
 
 This project's own work is under the MIT license: see [LICENSE](LICENSE) for what it covers and what it does not. See also [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
+## AI Note
+
+The application was developed using AI. I'm just an enthusiast who wanted to create interesting projects. In this case, how it was achieved is not relevant to me.

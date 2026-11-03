@@ -182,14 +182,14 @@ static void poll_input(void)
 
 int gta2_n64_gfx_active(void);
 /* Start choice, read by game_entry.cpp: -1 = original GTA 2 menu; 0 = bil (Industrial), 1 = ste (Residential), 2 = wil (Downtown)
- * straight into the map (no menu). Holding Z at power-on skips the menu: Z = bil, Z + C-down = ste, Z + C-left = wil. */
+ * straight into the map (no menu). Debug ROMs only (N64_DEBUG_OVERLAY): holding Z at power-on skips the menu: Z = bil, Z + C-down = ste, Z + C-left = wil. */
 static void read_boot_choice(void)
 {
-    joypad_inputs_t in;
-    memset(&in, 0, sizeof(in));
     for (int i = 0; i < 4; ++i) { joypad_poll(); wait_ms(20); } /* the 1st poll may come back empty */
-    in = joypad_get_inputs(JOYPAD_PORT_1);
+#if N64_DEBUG_OVERLAY
+    joypad_inputs_t in = joypad_get_inputs(JOYPAD_PORT_1);
     if (in.btn.z) gta2_n64_boot_map = in.btn.c_left ? 2 : in.btn.c_down ? 1 : 0;
+#endif
 }
 
 int main(void)
@@ -234,7 +234,7 @@ int main(void)
     read_boot_choice();
     console_render();
     int console_on_screen = 1; /* until the first frame of the engine; 0: the loading screen stays there instead */
-    if (gta2_n64_boot_map < 0) { /* holding Z at power-on goes straight into a map */
+    if (gta2_n64_boot_map < 0) { /* debug ROMs: holding Z at power-on goes straight into a map */
         extern void gta2_n64_play_logo(void);  /* logo_n64.c */
         extern void gta2_n64_play_intro(void); /* intro_n64.c */
         gta2_n64_play_logo();

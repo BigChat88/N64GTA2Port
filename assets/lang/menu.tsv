@@ -1,37 +1,36 @@
 # Text of the N64 Options page, added to each language's .gxt at build time by tools/lang_gxt.py.
-# Format: key<TAB>English<TAB>Spanish<TAB>Brazilian Portuguese. Keys have at most 7 characters: the engine does not find longer ones.
-n64mus	MUSIC	MUSICA	MUSICA
-n64efx	EFFECTS	EFECTOS	EFEITOS
-n64lang	LANGUAGE	IDIOMA	IDIOMA
-n64tod	TIME OF DAY	HORA	HORA
-n64noon	NOON	MEDIODIA	MEIO DIA
-n64dusk	DUSK	ATARDECER	ENTARDECER
-n64mode	MODE	MODO	MODO
-n64perf	PERFORMANCE	RENDIMIENTO	DESEMPENHO
-n64qual	QUALITY	CALIDAD	QUALIDADE
-n64lge	ENGLISH	ENGLISH	ENGLISH
-n64lgs	ESPANOL	ESPANOL	ESPANOL
-n64lgp	PORTUGUES	PORTUGUES	PORTUGUES
-n64lim	LIMIT 30 FPS	LIMITE 30 FPS	LIMITE 30 FPS
-n64on	ON	SI	SIM
-n64off	OFF	NO	NAO
-quit2	Press A to quit play.	Pulsa A para dejar de jugar.	Pressione A para sair do jogo.
-quit3	Press B to go back.	Pulsa B para volver.	Pressione B para voltar.
-n64rmb	RUMBLE	VIBRACION	VIBRACAO
-n64back	Press B for the main menu.	Pulsa B para ir al menu principal.	Pressione B para o menu principal.
-n64chts	CHEATS	TRUCOS	TRAPACAS
-n64chnt	Press A to apply. Press B to exit.	Pulsa A para aplicar. Pulsa B para salir.	Pressione A para aplicar. Pressione B para sair.
-n64done	DONE	LISTO	FEITO
-n64c1	INVINCIBILITY	INVENCIBILIDAD	INVENCIBILIDADE
-n64c2	ALL WEAPONS	TODAS LAS ARMAS	TODAS AS ARMAS
-n64c3	MAX MONEY	DINERO MAXIMO	DINHEIRO MAXIMO
-n64c4	99 LIVES	99 VIDAS	99 VIDAS
-n64c5	MAX RESPECT	RESPETO MAXIMO	RESPEITO MAXIMO
-n64c6	10X MULTIPLIER	MULTIPLICADOR 10X	MULTIPLICADOR 10X
-n64c7	FREE SHOPPING	COMPRAS GRATIS	COMPRAS GRATIS
-n64c8	KEEP WEAPONS	CONSERVAR ARMAS	MANTER ARMAS
-n64pop	POPULATION	POBLACION	POPULACAO
-n64low	LOW	BAJA	BAIXA
-n64med	MEDIUM	MEDIA	MEDIA
-n64high	HIGH	ALTA	ALTA
-n64cred	CREDITS	CREDITOS	CREDITOS
+# Format: key<TAB>English<TAB>Spanish. Keys have at most 7 characters: the engine does not find longer ones.
+n64mus	MUSIC	MUSICA
+n64efx	EFFECTS	EFECTOS
+n64lang	LANGUAGE	IDIOMA
+n64tod	TIME OF DAY	HORA
+n64noon	NOON	MEDIODIA
+n64dusk	DUSK	ATARDECER
+n64mode	MODE	MODO
+n64perf	PERFORMANCE	RENDIMIENTO
+n64qual	QUALITY	CALIDAD
+n64lge	ENGLISH	ENGLISH
+n64lgs	ESPANOL	ESPANOL
+n64lim	LIMIT 30 FPS	LIMITE 30 FPS
+n64on	ON	SI
+n64off	OFF	NO
+quit2	Press A to quit play.	Pulsa A para dejar de jugar.
+quit3	Press B to go back.	Pulsa B para volver.
+n64rmb	RUMBLE	VIBRACION
+n64back	Press B for the main menu.	Pulsa B para ir al menu principal.
+n64chts	CHEATS	TRUCOS
+n64chnt	Press A to apply. Press B to exit.	Pulsa A para aplicar. Pulsa B para salir.
+n64done	DONE	LISTO
+n64c1	INVINCIBILITY	INVENCIBILIDAD
+n64c2	ALL WEAPONS	TODAS LAS ARMAS
+n64c3	MAX MONEY	DINERO MAXIMO
+n64c4	99 LIVES	99 VIDAS
+n64c5	MAX RESPECT	RESPETO MAXIMO
+n64c6	10X MULTIPLIER	MULTIPLICADOR 10X
+n64c7	FREE SHOPPING	COMPRAS GRATIS
+n64c8	KEEP WEAPONS	CONSERVAR ARMAS
+n64pop	POPULATION	POBLACION
+n64low	LOW	BAJA
+n64med	MEDIUM	MEDIA
+n64high	HIGH	ALTA
+n64cred	CREDITS	CREDITOS

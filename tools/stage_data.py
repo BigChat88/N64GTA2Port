@@ -45,7 +45,7 @@ def py(script, *args):
 
 
 def entries(maps, bonus, radios, frontend):
-    out = ["fstyle.sty", "e.gxt", "s.gxt", "p.gxt"]
+    out = ["fstyle.sty", "e.gxt", "s.gxt"]
     for m in maps:
         out += [m + ".gmp", m + ".sty", m + ".scr", m]
     for b in bonus:
@@ -182,20 +182,15 @@ def stage(src, out, audioconv, maps=MAPS.split(), bonus=BONUS.split(), radios=RA
         keep.update(stage_intro(src, data, out_base, audioconv, ffmpeg, intro_kbps, INTRO_AUDIO_QUALITY))
 
     with tempfile.TemporaryDirectory(prefix="gta2stage-") as tmp:
-        # Every language gets the N64 menu text (assets/lang/menu.tsv). p.gxt (Brazilian Portuguese) does not exist in
-        # the original game: if missing from the data folder, it is generated from e.gxt + assets/lang/pt_br.tsv
+        # Every language gets the N64 menu text (assets/lang/menu.tsv).
         generated = {}
-        for code in "esp":
+        for code in "es":
             base = find_ci(src, code + ".gxt")
-            extra = []
-            if code == "p" and not base:
-                base = find_ci(src, "e.gxt")
-                extra = [os.path.join(LANG, "pt_br.tsv")]
             if not base:
                 continue
             out_gxt = os.path.join(tmp, code + ".gxt")
             try:
-                py("lang_gxt.py", base, out_gxt, code, os.path.join(LANG, "menu.tsv"), *extra)
+                py("lang_gxt.py", base, out_gxt, code, os.path.join(LANG, "menu.tsv"))
                 generated[code + ".gxt"] = out_gxt
             except subprocess.CalledProcessError:
                 print("WARNING: could not prepare %s.gxt" % code, flush=True)
@@ -259,7 +254,7 @@ def add_options(ap):
     ap.add_argument("--bonus", default=BONUS, help="bonus levels to include")
     ap.add_argument("--radios", default=RADIOS, help="radio stations to include")
     ap.add_argument("--sfx-maps", default=SFX_MAPS, help="sound banks merged into audio/sfx.raw")
-    ap.add_argument("--no-frontend", action="store_true", help="leave out the menu screens (hold Z at power-on to enter a map)")
+    ap.add_argument("--no-frontend", action="store_true", help="leave out the menu screens (debug ROMs only: a standard ROM cannot start a game without them)")
     ap.add_argument("--radio-rate", type=int, default=12000, help="radio sample rate in Hz (default: %(default)s; 8000 = smaller)")
     ap.add_argument("--radio-quality", type=int, default=35, help="radio ULC quality (default: %(default)s)")
     ap.add_argument("--no-intro", action="store_true", help="leave out the intro movie (about 9.5 MB)")

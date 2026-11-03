@@ -31,6 +31,4 @@ All of them come from the game's `data` folder:
 | `gtaudio/*.wav` | Radio stations: `1`–`12`, `5a`–`11a` and `101a` |
 | `movie/intro.bik` | Intro movie (optional; converting it needs ffmpeg) |
 
-A missing file only prints a warning, but the game may not work without it. Other files in the folder are ignored.
-
-`p.gxt` (Brazilian Portuguese text) is not part of the game: the build generates it from `e.gxt` and `assets/lang/pt_br.tsv`.
+Other files in the folder are ignored.

@@ -969,14 +969,14 @@ index d795ddf..65cc7fc 100644
 +    N64_OPT_TOP = 210 // y of the first row: high enough to clear the logo at the bottom of the page
 +};
 +
-+// Options page languages: 0 = English (e), 1 = Spanish (s), 2 = Portuguese (p)
++// Options page languages: 0 = English (e), 1 = Spanish (s)
 +static inline int N64_LangIdx(char c)
 +{
-+    return c == 's' ? 1 : (c == 'p' ? 2 : 0);
++    return c == 's' ? 1 : 0;
 +}
 +static inline char N64_LangCode(int i)
 +{
-+    return i == 1 ? 's' : (i == 2 ? 'p' : 'e');
++    return i == 1 ? 's' : 'e';
 +}
 +
 +// The name of a profile on the Play page: fixed on N64, with its number; in capitals: this font has no lowercase letters
@@ -1010,7 +1010,7 @@ index d795ddf..65cc7fc 100644
 +        return;
 +    }
 +    {
-+        // the language .gxt is optional (e.g.: p.gxt does not ship with the repository): without the file, keeps the current language
++        // the language .gxt is optional (e.g.: s.gxt missing from the game folder used at build time): without the file, keeps the current language
 +        char fn[16];
 +        sprintf(fn, "data\\%c.gxt", code);
 +        FILE* h = fopen(fn, "rb");
@@ -1127,7 +1127,7 @@ index d795ddf..65cc7fc 100644
 +    {
 +        const u16 lang_idx = pOption->field_6E_horizontal_selected_idx;
 +        swprintf(gTmpWideStr_67C7D8, L"%s %s", pOption->field_6_option_name_str,
-+                 gText_0x14_704DFC->Find_5B5F90(lang_idx == 2 ? "n64lgp" : (lang_idx == 1 ? "n64lgs" : "n64lge")));
++                 gText_0x14_704DFC->Find_5B5F90(lang_idx == 1 ? "n64lgs" : "n64lge"));
 +    }
 +    else if (menu_page_idx == MENUPAGE_15 && option_idx == 3)
 +    {
@@ -1432,7 +1432,7 @@ index d795ddf..65cc7fc 100644
 +            wcsncpy(op.field_6_option_name_str, gText_0x14_704DFC->Find_5B5F90(kNames[o]), 0x32u);
 +            op.field_6E_horizontal_selected_idx = (o == 2) ? (u16)N64_LangIdx(lg) : (o == 3 ? (u16)gta2_n64_get_lights() : (o == 4 ? (u16)gta2_n64_get_mode() : (o == 5 ? (u16)gta2_n64_get_fps_limit() : 10)));
 +            op.field_70 = 0;
-+            op.field_7E_horizontal_max_idx = (o == 2 || o == 7) ? 2 : ((o >= 3) ? 1 : 10);
++            op.field_7E_horizontal_max_idx = (o == 7) ? 2 : ((o >= 2) ? 1 : 10);
 +            for (u16 k = 0; k <= op.field_7E_horizontal_max_idx; k++)
 +            {
 +                op.field_72_horizontal_idx_enabled[k] = 1;
@@ -3985,7 +3985,7 @@ new file mode 100644
 index 0000000..10defd3
 --- /dev/null
 +++ b/Source/n64_population.h
-@@ -0,0 +1,32 @@
+@@ -0,0 +0,32 @@
 +#pragma once
 +// N64 tech demo population: percentage of the ORIGINAL amount of pedestrians and cars (100 = same as PC).
 +// Adjust only this number: 60 = 40% fewer people and cars. -DN64_POP_PCT=50 can be passed in the Makefile.
@@ -4101,7 +4101,7 @@ new file mode 100644
 index 0000000..28b95cd
 --- /dev/null
 +++ b/Source/port_static_init.cpp
-@@ -0,0 +1,48 @@
+@@ -0,0 +0,48 @@
 +// Port: run-time replacements for the original executable's static
 +// initialisers (its C runtime start-up, _cinit, built these tables before
 +// WinMain). Upstream's standalone build only runs them from the ImGui debug
@@ -4327,31 +4327,7 @@ diff --git a/Source/text_0x14.cpp b/Source/text_0x14.cpp
 index 78c7432..b6c2733 100644
 --- a/Source/text_0x14.cpp
 +++ b/Source/text_0x14.cpp
-@@ -177,6 +177,23 @@ u16 text_0x14::ToUpper_5B5AD0(wchar_t a2)
-             }
-             break;
- 
-+#ifdef N64
-+        case 'p': // Portuguese: the .gxt stores accented letters as font glyph codes: lowercase 151..172 -> uppercase 128..149, n with tilde 174 -> 173
-+            if (a2 >= 'a' && a2 <= 'z')
-+            {
-+                return a2 - ' ';
-+            }
-+            if (a2 >= 151 && a2 <= 172)
-+            {
-+                return a2 - 23;
-+            }
-+            if (a2 == 174)
-+            {
-+                return 173;
-+            }
-+            break;
-+#endif
-+
-         case 'f':
-             if (a2 >= 'a' && a2 <= 'z')
-             {
-@@ -198,7 +215,11 @@ u16 text_0x14::ToUpper_5B5AD0(wchar_t a2)
+@@ -198,7 +198,11 @@ u16 text_0x14::ToUpper_5B5AD0(wchar_t a2)
              }
              if (a2 >= 0x80 && a2 <= 0xFF)
              {
@@ -4363,15 +4339,15 @@ index 78c7432..b6c2733 100644
              }
              break;
      }
-@@ -395,13 +416,20 @@ bool text_0x14::KeyExists_5B5FA0(const char_type* pIdStr)
+@@ -395,13 +399,20 @@ bool text_0x14::KeyExists_5B5FA0(const char_type* pIdStr)
      return TKeyFind_5B59E0(pIdStr);
  }
  
 +#ifdef N64
 +#ifndef N64_LANG_DEFAULT
-+#define N64_LANG_DEFAULT 'e' // 'e' English, 's' Spanish, 'p' Portuguese (the game switches language on the Options page)
++#define N64_LANG_DEFAULT 'e' // 'e' English, 's' Spanish (the game switches language on the Options page)
 +#endif
-+char gN64Language = N64_LANG_DEFAULT; // language chosen on the Options page ('e' English, 's' Spanish, 'p' Portuguese); applies to the menu and the game
++char gN64Language = N64_LANG_DEFAULT; // language chosen on the Options page ('e' English, 's' Spanish); applies to the menu and the game
 +#endif
 +
  MATCH_FUNC(0x5B5FB0)
@@ -4380,12 +4356,11 @@ index 78c7432..b6c2733 100644
      gRegistry_6FF968.Get_Option_586F00("language", reinterpret_cast<BYTE*>(gTmpBuffer_67C598), sizeof(gTmpBuffer_67C598));
  
      if (gTmpBuffer_67C598[0] == 'e' || gTmpBuffer_67C598[0] == 'f' || gTmpBuffer_67C598[0] == 'g' || gTmpBuffer_67C598[0] == 'i' ||
--        gTmpBuffer_67C598[0] == 's' || gTmpBuffer_67C598[0] == 'j' || gTmpBuffer_67C598[0] == 'r')
-+        gTmpBuffer_67C598[0] == 's' || gTmpBuffer_67C598[0] == 'p' || gTmpBuffer_67C598[0] == 'j' || gTmpBuffer_67C598[0] == 'r')
+         gTmpBuffer_67C598[0] == 's' || gTmpBuffer_67C598[0] == 'j' || gTmpBuffer_67C598[0] == 'r')
      {
          field_10_lang_code = gTmpBuffer_67C598[0];
      }
-@@ -409,6 +437,9 @@ text_0x14::text_0x14()
+@@ -409,6 +420,9 @@ text_0x14::text_0x14()
      {
          field_10_lang_code = 'e';
      }

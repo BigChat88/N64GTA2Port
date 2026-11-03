@@ -1,13 +1,12 @@
 #!/usr/bin/env python3
-"""Prepares a language's .gxt: adds the N64 menu text and, for Portuguese, applies the translation.
+"""Prepares a language's .gxt: adds the N64 menu text.
 
-usage: lang_gxt.py <input.gxt> <output.gxt> <e|s|p> <menu.tsv> [translation.tsv]
+usage: lang_gxt.py <input.gxt> <output.gxt> <e|s> <menu.tsv>
 
 The GTA 2 .gxt format (PC, little-endian): 'GBL'+language+version(u16=100), then the chunks
 TKEY (12 bytes per text: u32 offset + 8-char key) and TDAT (zero-terminated UTF-16LE texts).
 The engine looks keys up with bsearch, so they stay sorted.
-Accented letters are stored as the font's GLYPH CODES (128..176), as in s.gxt; the font has no ã/õ,
-so those use the â/ô glyphs.
+Accented letters are stored as the font's GLYPH CODES (128..176), as in s.gxt.
 """
 import struct, sys
 
@@ -18,10 +17,8 @@ for i, ch in enumerate("ÀÁÂÄÆÇÈÉÊËÌÍÎÏÒÓÔÖÙÚÛÜß"):       
 for i, ch in enumerate("àáâäæçèéêëìíîïòóôöùúûü"):          # 151..172
     GLYPH[ch] = 151 + i
 GLYPH.update({'Ñ': 173, 'ñ': 174, '¿': 175, '¡': 176})
-GLYPH.update({'Ã': GLYPH['Â'], 'ã': GLYPH['â'], 'Õ': GLYPH['Ô'], 'õ': GLYPH['ô']})   # no tilde in the font
-GLYPH.update({'º': ord('o'), 'ª': ord('a'), '°': ord('o')})
 
-MENU_COLUMN = {'e': 1, 's': 2, 'p': 3}
+MENU_COLUMN = {'e': 1, 's': 2}
 
 
 def enc(t):
@@ -71,14 +68,7 @@ def read_gxt(path):
 
 def main():
     src, dst, lang, menu = sys.argv[1:5]
-    translation = sys.argv[5] if len(sys.argv) > 5 else None
     texts = read_gxt(src)
-    translated = 0
-    if translation:
-        for k, t in read_tsv(translation):
-            if k in texts:
-                texts[k] = enc(t)
-                translated += 1
     for row in read_tsv(menu):
         assert len(row[0]) <= 7, "key too long, the engine does not find it: " + row[0]
         texts[row[0]] = enc(row[MENU_COLUMN[lang]])
@@ -91,7 +81,7 @@ def main():
     out += b'TKEY' + struct.pack('<I', len(ktab)) + bytes(ktab)
     out += b'TDAT' + struct.pack('<I', len(data)) + bytes(data)
     open(dst, 'wb').write(out)
-    print("%s.gxt: %d texts, %d bytes (%d translated)" % (lang, len(texts), len(out), translated))
+    print("%s.gxt: %d texts, %d bytes" % (lang, len(texts), len(out)))
 
 
 if __name__ == '__main__':

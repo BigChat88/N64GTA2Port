@@ -18,7 +18,7 @@ jobs:
   bundle:
     runs-on: ubuntu-latest
     container:
-      image: ghcr.io/n64brew/libdragon:latest   # mips64-elf toolchain + $N64_INST
+      image: ghcr.io/n64brew/libdragon:preview   # mips64-elf toolchain + $N64_INST
 
     steps:
       - name: Install packaging deps
@@ -58,10 +58,10 @@ jobs:
       - name: Build the host tools (Linux + Windows)
         run: |
           mkdir -p hosttools/linux hosttools/windows
-          bash tools/vendor/bin/build-tools.sh
-          mv tools/vendor/bin/n64tool tools/vendor/bin/mkdfs tools/vendor/bin/ed64romconfig tools/vendor/bin/audioconv64 hosttools/linux/
+          LDFLAGS=-static bash tools/vendor/bin/build-tools.sh
+          cp tools/vendor/bin/n64tool tools/vendor/bin/mkdfs tools/vendor/bin/ed64romconfig tools/vendor/bin/audioconv64 hosttools/linux/
           CC=x86_64-w64-mingw32-gcc CXX=x86_64-w64-mingw32-g++ bash tools/vendor/bin/build-tools.sh
-          mv tools/vendor/bin/*.exe hosttools/windows/
+          cp tools/vendor/bin/*.exe hosttools/windows/
           ls -l hosttools/*
 
       - name: Stage the bundle
