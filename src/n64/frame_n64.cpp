@@ -40,24 +40,50 @@ HudCacheSlot gHudCache[4];
 // N64: RAM is the limit (the heap stack touches the end of memory). If a mission screen with a lot of text asks for more vertices
 // than the vector holds, the vector doubles in size and, without RAM for the copy, operator new returns null and the game hangs
 // (write to an invalid address). Before growing, tests whether the larger copy fits; if not, drops whatever exceeds the limit.
+// Grows by half, not by double: the old and the new copy coexist in one piece each, and free RAM is split into many pieces. A busy scene
+// with 600 KB free still could not double the vertices. If even that does not fit, tries just enough for the next few, then gives up:
+// what is left out of this frame is not drawn.
+// volatile: without it the compiler removes a malloc whose result is only tested and freed, and the test with it.
+uint32_t gDropped = 0;
+
 template <class T>
-bool ensureRoom(std::vector<T>& v, size_t extra)
+bool roomFits(size_t count)
 {
-    if (v.size() + extra <= v.capacity())
-    {
-        return true;
-    }
-    size_t cap = v.capacity() * 2;
-    if (cap < v.size() + extra)
-    {
-        cap = v.size() + extra;
-    }
-    void* probe = malloc(cap * sizeof(T));
+    void* volatile probe = malloc(count * sizeof(T));
     if (!probe)
     {
         return false;
     }
     free(probe);
+    return true;
+}
+
+template <class T>
+bool ensureRoom(std::vector<T>& v, size_t extra)
+{
+    const size_t need = v.size() + extra;
+    if (need <= v.capacity())
+    {
+        return true;
+    }
+    size_t cap = v.capacity() + v.capacity() / 2;
+    if (cap < 64u * 1024u / sizeof(T))
+    {
+        cap = 64u * 1024u / sizeof(T);
+    }
+    if (cap < need)
+    {
+        cap = need;
+    }
+    if (!roomFits<T>(cap))
+    {
+        cap = need + 4096u / sizeof(T);
+        if (!roomFits<T>(cap))
+        {
+            ++gDropped;
+            return false;
+        }
+    }
     v.reserve(cap);
     return true;
 }
@@ -128,6 +154,12 @@ void txtReset()
 } // namespace
 
 extern "C" {
+
+// For the diagnostic overlay: draw requests left out for lack of RAM
+uint32_t gta2_frame_dropped(void)
+{
+    return gDropped;
+}
 
 void gta2_frame_push_vertex(uint32_t texture, uint32_t blend, const FrameVertex& v)
 {

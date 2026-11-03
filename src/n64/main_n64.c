@@ -107,22 +107,17 @@ static void poll_input(void)
     if (guard && !(in.btn.a || in.btn.b || in.btn.start || in.btn.c_up)) guard = 0;
     const int start_ok = in.btn.start && start_prev;
     start_prev = in.btn.start;
-    /* MATCH-ENTRY SHIELD: on entering the game (or booting directly into a map) all game keys stay off until the
-     * controller is 100% neutral (no button, analog near center) for 6 consecutive reads and 0.8 s have passed; 5 s at most. */
+    /* MATCH-ENTRY SHIELD: on entering the game (or booting directly into a map) all game keys stay off for 0.8 s, and queued
+     * key events are dropped. It must not wait for the controller to rest: a player already pressing buttons would stay locked out. */
     const uint32_t now_ms = (uint32_t)get_ticks_ms();
-    static int bp_menu = -1, neutral_n;
+    static int bp_menu = -1;
     static uint32_t blank_t0;
-    const int pad_neutral = !(in.btn.a || in.btn.b || in.btn.z || in.btn.start || in.btn.l || in.btn.r || in.btn.c_up || in.btn.c_down ||
-                              in.btn.c_left || in.btn.c_right || in.btn.d_up || in.btn.d_down || in.btn.d_left || in.btn.d_right) &&
-                            in.stick_x > -15 && in.stick_x < 15 && in.stick_y > -15 && in.stick_y < 15;
-    if (!menu && bp_menu != 0) { blank_t0 = now_ms | 1u; neutral_n = 0; }
+    if (!menu && bp_menu != 0) { blank_t0 = now_ms | 1u; }
     bp_menu = menu;
-    neutral_n = pad_neutral ? (neutral_n < 100 ? neutral_n + 1 : neutral_n) : 0;
     int blank = 0;
     if (!menu && blank_t0)
     {
-        const uint32_t el = now_ms - blank_t0;
-        if (el >= 5000u || (el >= 800u && neutral_n >= 6)) blank_t0 = 0;
+        if (now_ms - blank_t0 >= 800u) blank_t0 = 0;
         else blank = 1;
     }
     const int dup = in.btn.d_up || (menu && in.stick_y > 40), ddown = in.btn.d_down || (menu && in.stick_y < -40);
@@ -157,6 +152,20 @@ static void poll_input(void)
     }
     cheat_combo_prev = cheat_combo;
     const int cheat_block = g_cheat_sel >= 0 || cheat_guard;
+#if N64_DEBUG_OVERLAY
+    /* to compare settings in the same spot, while paused: L = mode, R = pedestrians, C-down = traffic, Z = time of day. Not saved */
+    if (pause_state == 1 && g_cheat_sel < 0)
+    {
+        extern int gta2_n64_get_mode(void); extern void gta2_n64_set_mode(int v);             /* Camera.cpp */
+        extern int gta2_n64_get_population(void); extern void gta2_n64_set_population(int v); /* Char_Pool.cpp */
+        extern int gta2_n64_get_traffic(void); extern void gta2_n64_set_traffic(int v);       /* Char_Pool.cpp */
+        extern int gta2_n64_get_lights(void); extern void gta2_n64_set_lights(int v);         /* gbh_n64.cpp */
+        if (pressed.l) gta2_n64_set_mode(!gta2_n64_get_mode());
+        if (pressed.r) gta2_n64_set_population((gta2_n64_get_population() + 1) % 3);
+        if (pressed.c_down) gta2_n64_set_traffic((gta2_n64_get_traffic() + 1) % 3);
+        if (pressed.z) gta2_n64_set_lights(!gta2_n64_get_lights());
+    }
+#endif
     if (pause_state == 2 && pressed.a && !guard && !blank)
     {
         gta2_game_quit_to_menu();
@@ -242,6 +251,9 @@ int main(void)
         gta2_n64_show_loading();
         console_on_screen = 0;
     }
+
+    extern void gta2_n64_fx_pool_init(void); /* audio_n64.c */
+    gta2_n64_fx_pool_init(); /* before the engine: the block stays at the bottom of the heap and splits nothing it asks for later */
 
     const int rc = gta2_game_init();
     if (rc != 0)

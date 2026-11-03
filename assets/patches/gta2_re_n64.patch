@@ -424,7 +424,7 @@ index 42105c9..4934307 100644
      EXPORT void HandleCarCollision_55FF20(Car_BC* pOtherCar);
      EXPORT void HandleObjectCollision_5606C0(Object_2C* a2, char_type a3);
 diff --git a/Source/Car_BC.cpp b/Source/Car_BC.cpp
-index 7b7ae3e..289ac7b 100644
+index 7b7ae3e..714540f 100644
 --- a/Source/Car_BC.cpp
 +++ b/Source/Car_BC.cpp
 @@ -1,3 +1,4 @@
@@ -453,7 +453,60 @@ index 7b7ae3e..289ac7b 100644
          {
              *pOut = 0;
              return car_model_enum::none;
-@@ -1828,8 +1830,24 @@ bool Car_BC::IsEnterable_445360()
+@@ -1588,9 +1590,35 @@ void Car_6C::EnableFreeShoppingIfAllKFsPassed_446760()
+     }
+ }
+ 
++#ifdef N64
++// Cars nobody sees and nobody uses (usually parked, tens of them at once) do their routine work one frame in four:
++// doors, lights, horn, trailers and the check for despawning. See Car_BC::PoolUpdate.
++#define N64_IDLE_CAR_PERIOD 4u
++static u32 sN64CarFrame;
++#endif
++#if N64_DEBUG_OVERLAY
++extern "C" u32 gta2_prof_now(void); // render_n64.c: where the time of a frame goes
++extern "C" void gta2_prof_add(int which, u32 t0);
++static int sN64CarsPhysics, sN64CarsIdle, sN64CarsPhysicsShown, sN64CarsIdleShown;
++extern "C" void gta2_cars_status(int* total, int* visible, int* physics, int* idle)
++{
++    *total = gCar_BC_Pool_67792C ? gCar_BC_Pool_67792C->get_cars_count_45AD30() : 0;
++    *visible = gCar_6C_677930 ? (u8)gCar_6C_677930->field_55_visible_cars_count : 0;
++    *physics = sN64CarsPhysicsShown;
++    *idle = sN64CarsIdleShown;
++}
++#endif
++
+ MATCH_FUNC(0x446790)
+ void Car_6C::CarsService_446790()
+ {
++#ifdef N64
++    ++sN64CarFrame;
++#endif
++#if N64_DEBUG_OVERLAY
++    const u32 n64_prof_t0 = gta2_prof_now();
++    sN64CarsPhysics = sN64CarsIdle = 0;
++#endif
+     EnableFreeShoppingIfAllKFsPassed_446760();
+ 
+     gTaxi_4_704130->PopAll_457BC0();
+@@ -1599,7 +1627,16 @@ void Car_6C::CarsService_446790()
+ 
+     gCar_BC_Pool_67792C->field_0_pool.UpdatePool();
+ 
++#if N64_DEBUG_OVERLAY
++    gta2_prof_add(13, n64_prof_t0); // PROF_CAR_POOL
++    sN64CarsPhysicsShown = sN64CarsPhysics;
++    sN64CarsIdleShown = sN64CarsIdle;
++    const u32 n64_prof_t1 = gta2_prof_now();
++#endif
+     gCar_14_677934->GenerateTraffic_583670();
++#if N64_DEBUG_OVERLAY
++    gta2_prof_add(14, n64_prof_t1); // PROF_TRAFFIC
++#endif
+ 
+     if (field_54 > 0)
+     {
+@@ -1828,8 +1865,24 @@ bool Car_BC::IsEnterable_445360()
  }
  
  MATCH_FUNC(0x43D5D0)
@@ -478,7 +531,7 @@ index 7b7ae3e..289ac7b 100644
      if ((field_84_car_info_idx == car_model_enum::TAXI || field_84_car_info_idx == car_model_enum::STYPECAB) && damage > k_dword_6777D4)
      {
          // Big taxi crash, time for the passengers to do a runner
-@@ -5670,7 +5688,7 @@ Ang16 Car_BC::GetRadioTowerAngle_442520()
+@@ -5670,7 +5723,7 @@ Ang16 Car_BC::GetRadioTowerAngle_442520()
  EXTERN_GLOBAL(Fix16, kFPZero_6691B0);
  DEFINE_GLOBAL_INIT(Fix16, kAngFix16FullCircle_66A8E4, Fix16(0x18F60, 0), 0x66A8E4);
  DEFINE_GLOBAL_INIT(Fix16, kAngFix16HalfCircle_6691EC, Fix16(0xC7B0, 0), 0x6691EC);
@@ -487,7 +540,7 @@ index 7b7ae3e..289ac7b 100644
  {
      Fix16 result = unk;
      for (; result < kFPZero_6691B0; result += kAngFix16FullCircle_66A8E4)
-@@ -5688,7 +5706,7 @@ inline Fix16 __stdcall WrapAngle_40E790(Fix16& unk) // 9.6f inlined func
+@@ -5688,7 +5741,7 @@ inline Fix16 __stdcall WrapAngle_40E790(Fix16& unk) // 9.6f inlined func
  // TODO: Move
  // https://decomp.me/scratch/GnD4O
  MATCH_FUNC(0x405CE0)
@@ -496,7 +549,42 @@ index 7b7ae3e..289ac7b 100644
  {
      if (a1 - a3 > kAngFix16HalfCircle_6691EC)
      {
-@@ -7186,7 +7204,7 @@ void Car_14::MakeTrafficForCurrCamera_5832C0()
+@@ -6160,6 +6213,34 @@ char_type Car_BC::PoolUpdate()
+         this->field_0_attachments.PropagateMaxZLayer_5A72B0(this->field_50_car_sprite, 0);
+     }
+ 
++#ifdef N64
++    // Still registered for collisions, above and below. Not when seen, driven or occupied, nor with a countdown or the horn running.
++    const bool n64_idle = !field_58_physics && !field_54_driver && !field_4_passengers_list.field_0_pFirstPed && field_76_last_seen_timer != 0 &&
++        field_A9_timer == 0 && field_A7_horn == 0;
++#if N64_DEBUG_OVERLAY
++    if (field_58_physics)
++    {
++        ++sN64CarsPhysics;
++    }
++    if (n64_idle)
++    {
++        ++sN64CarsIdle;
++    }
++#endif
++    if (n64_idle)
++    {
++        if ((static_cast<u32>(reinterpret_cast<uintptr_t>(this) / sizeof(Car_BC)) + sN64CarFrame) % N64_IDLE_CAR_PERIOD != 0)
++        {
++            if (field_88_despawn_status != car_despawn_status::despawning_5)
++            {
++                gSpriteGrid_1_679208->AddToRegionBuckets_477B20(field_50_car_sprite);
++            }
++            return 0;
++        }
++        field_76_last_seen_timer += N64_IDLE_CAR_PERIOD - 1; // the despawn timer counts frames: keeps its pace (ManageDespawning limits it)
++    }
++#endif
++
+     if (this->field_58_physics)
+     {
+         ManageDrowning_43E560();
+@@ -7186,7 +7267,7 @@ void Car_14::MakeTrafficForCurrCamera_5832C0()
  {
      Fix16 w;
  
@@ -506,7 +594,7 @@ index 7b7ae3e..289ac7b 100644
          gCar_6C_677930->field_28_recycled_cars + gCar_6C_677930->field_40_proto_recycled_cars != 16)
      {
 diff --git a/Source/Char_Pool.cpp b/Source/Char_Pool.cpp
-index cffe1fc..3fb97f7 100644
+index cffe1fc..b8349ce 100644
 --- a/Source/Char_Pool.cpp
 +++ b/Source/Char_Pool.cpp
 @@ -1,3 +1,5 @@
@@ -524,7 +612,7 @@ index cffe1fc..3fb97f7 100644
              {
                  if (gMap_0x370_6F6268->FindPavementBlockForCoord_4E4BB0(xpos.ToInt(), ypos.ToInt(), zpos))
                  {
-@@ -584,10 +586,55 @@ void PedManager::SpawnDummies_46EB60(Camera_0xBC* pCam)
+@@ -584,10 +586,70 @@ void PedManager::SpawnDummies_46EB60(Camera_0xBC* pCam)
      }
  }
  
@@ -545,14 +633,29 @@ index cffe1fc..3fb97f7 100644
 +
 +#ifdef N64
 +// Options page: 0 = low, 1 = medium, 2 = high
-+static int sN64Population = 1;
++static int sN64Population = 0;
 +extern "C" int gta2_n64_get_population(void)
 +{
 +    return sN64Population;
 +}
 +extern "C" void gta2_n64_set_population(int level)
 +{
-+    sN64Population = (level >= 0 && level <= 2) ? level : 1;
++    sN64Population = (level >= 0 && level <= 2) ? level : 0;
++}
++// The same, for the traffic: 0 = low, 1 = medium, 2 = high
++static int sN64Traffic = 0;
++extern "C" int gta2_n64_get_traffic(void)
++{
++    return sN64Traffic;
++}
++extern "C" void gta2_n64_set_traffic(int level)
++{
++    sN64Traffic = (level >= 0 && level <= 2) ? level : 0;
++}
++extern "C" int gta2_n64_car_pct(void)
++{
++    static const int kPct[3] = {40, 50, 60};
++    return kPct[sN64Traffic];
 +}
 +// A kill frenzy asks for dozens of kills in a couple of minutes, impossible with few people around: as many as on PC while it lasts
 +#ifndef N64_KF_PED_PCT
@@ -580,7 +683,7 @@ index cffe1fc..3fb97f7 100644
      if (gPolice_7B8_6FEE40->field_654_max_wanted_level > 3)
      {
          v1 = (u16)v1 >> 1;
-@@ -721,7 +768,7 @@ PedManager::PedManager()
+@@ -721,7 +783,7 @@ PedManager::PedManager()
      field_3_num_peds_updated = 0;
      field_4_num_script_created_peds = 0;
      field_6_num_peds_on_screen = 0;
@@ -938,10 +1041,10 @@ index c010fb9..2543888 100644
      x += other.x;
      y += other.y;
 diff --git a/Source/Frontend.cpp b/Source/Frontend.cpp
-index d795ddf..65cc7fc 100644
+index d795ddf..49760ef 100644
 --- a/Source/Frontend.cpp
 +++ b/Source/Frontend.cpp
-@@ -37,6 +37,136 @@
+@@ -37,6 +37,133 @@
  #pragma comment(lib, "dxguid.lib")
  
  void Start_GTA2Manager_5E4DE0();
@@ -960,13 +1063,15 @@ index d795ddf..65cc7fc 100644
 +extern "C" void gta2_n64_set_rumble(int on);
 +extern "C" int gta2_n64_get_population(void); // Char_Pool.cpp
 +extern "C" void gta2_n64_set_population(int level);
++extern "C" int gta2_n64_get_traffic(void);
++extern "C" void gta2_n64_set_traffic(int level);
 +extern char gN64Language; // text_0x14.cpp
 +
 +// Options page rows: 0 music, 1 effects, 2 language, 3 time of day, 4 mode (performance/quality), 5 limit of 30 FPS; 6 = BACK
 +enum
 +{
-+    N64_OPT_ROWS = 8,
-+    N64_OPT_TOP = 210 // y of the first row: high enough to clear the logo at the bottom of the page
++    N64_OPT_ROWS = 9,
++    N64_OPT_TOP = 195 // y of the first row: high enough to clear the logo at the bottom of the page
 +};
 +
 +// Options page languages: 0 = English (e), 1 = Spanish (s)
@@ -997,6 +1102,7 @@ index d795ddf..65cc7fc 100644
 +    o[5].field_6E_horizontal_selected_idx = (u16)gta2_n64_get_fps_limit();
 +    o[6].field_6E_horizontal_selected_idx = (u16)gta2_n64_get_rumble();
 +    o[7].field_6E_horizontal_selected_idx = (u16)gta2_n64_get_population();
++    o[8].field_6E_horizontal_selected_idx = (u16)gta2_n64_get_traffic();
 +}
 +
 +// Applies the chosen value on row `row` of the Options page (saved on leaving the page)
@@ -1022,17 +1128,7 @@ index d795ddf..65cc7fc 100644
 +    }
 +    gN64Language = code;
 +    text_0x14* t = gText_0x14_704DFC;
-+    if (t->field_0_tKey.field_0_tKey)
-+    {
-+        delete[] t->field_0_tKey.field_0_tKey;
-+        t->field_0_tKey.field_0_tKey = 0;
-+    }
-+    if (t->field_8_tDat.field_0_data)
-+    {
-+        delete[] t->field_8_tDat.field_0_data;
-+        t->field_8_tDat.field_0_data = 0;
-+    }
-+    t->field_10_lang_code = code;
++    t->field_10_lang_code = code; // Load reads over the blocks it already has
 +    t->Load_5B5E90();
 +
 +    const u16 slot = f->field_136_menu_pages_array[1].field_4_options_array[0].field_6E_horizontal_selected_idx;
@@ -1073,12 +1169,16 @@ index d795ddf..65cc7fc 100644
 +    {
 +        gta2_n64_set_population(val);
 +    }
++    else if (row == 8)
++    {
++        gta2_n64_set_traffic(val);
++    }
 +}
 +#endif
  
  DEFINE_GLOBAL(Frontend*, gFrontend_67DC84, 0x67DC84);
  DEFINE_GLOBAL_INIT(u32, counter_706C4C, 0, 0x706C4C);
-@@ -431,6 +561,12 @@ void Frontend::ChangeMenuPage_4B3170(u16 menu_page_idx)
+@@ -431,6 +558,12 @@ void Frontend::ChangeMenuPage_4B3170(u16 menu_page_idx)
      wchar_t quit_name[64];
  
      PlySlot_A4* pStats = GetCurrPlayerStats_4B43E0();
@@ -1091,7 +1191,7 @@ index d795ddf..65cc7fc 100644
      field_132_f136_idx = menu_page_idx;
  
      if (menu_page_idx == MENUPAGE_PARENTAL_CONTROL)
-@@ -726,6 +862,12 @@ void Frontend::ChangeMenuPage_4B3170(u16 menu_page_idx)
+@@ -726,6 +859,12 @@ void Frontend::ChangeMenuPage_4B3170(u16 menu_page_idx)
              Bink::OpenSlot2_5133E0(gFrontend_67DC84->intro_bik_4B5E50(), gSampManager_6FFF00.field_0_hDriver);
          }
      }
@@ -1104,7 +1204,7 @@ index d795ddf..65cc7fc 100644
      else if (menu_page_idx == MENUPAGE_START_MENU)
      {
          field_C9E4_last_input_time = timeGetTime();
-@@ -758,6 +900,13 @@ void Frontend::GetOptionText_4B3AF0(u16 menu_page_idx, u16 option_idx, wchar_t**
+@@ -758,6 +897,13 @@ void Frontend::GetOptionText_4B3AF0(u16 menu_page_idx, u16 option_idx, wchar_t**
      {
          u16 plyr_idx = pOption->field_6E_horizontal_selected_idx;
          wchar_t* p_wName = (wchar_t*)&gPlyDat_6FEAC0->field_26A0_plyr_stats[plyr_idx].field_90_strPlayerName;
@@ -1118,7 +1218,7 @@ index d795ddf..65cc7fc 100644
          if (field_110_state == FrontendState::User_Typing_New_Player_Name_3)
          {
              // player typing a name
-@@ -775,6 +924,35 @@ void Frontend::GetOptionText_4B3AF0(u16 menu_page_idx, u16 option_idx, wchar_t**
+@@ -775,6 +921,35 @@ void Frontend::GetOptionText_4B3AF0(u16 menu_page_idx, u16 option_idx, wchar_t**
              swprintf(gTmpWideStr_67C7D8, L"%s", gPlyDat_6FEAC0->field_26A0_plyr_stats[plyr_idx].field_90_strPlayerName);
          }
      }
@@ -1139,7 +1239,7 @@ index d795ddf..65cc7fc 100644
 +        swprintf(gTmpWideStr_67C7D8, L"%s %s", pOption->field_6_option_name_str,
 +                 gText_0x14_704DFC->Find_5B5F90(pOption->field_6E_horizontal_selected_idx ? "n64qual" : "n64perf"));
 +    }
-+    else if (menu_page_idx == MENUPAGE_15 && option_idx == 7)
++    else if (menu_page_idx == MENUPAGE_15 && (option_idx == 7 || option_idx == 8))
 +    {
 +        const u16 population = pOption->field_6E_horizontal_selected_idx;
 +        swprintf(gTmpWideStr_67C7D8, L"%s %s", pOption->field_6_option_name_str,
@@ -1154,7 +1254,7 @@ index d795ddf..65cc7fc 100644
      else if (menu_page_idx == MENUPAGE_VIEW_HIGH_SCORE && option_idx == 0)
      {
          swprintf(gTmpWideStr_67C7D8, L"%s", gText_0x14_704DFC->Find_5B5F90("hi_for"));
-@@ -984,11 +1162,13 @@ void Frontend::DrawMenu_4AD140()
+@@ -984,11 +1159,13 @@ void Frontend::DrawMenu_4AD140()
      u16 selected_option_idx;
      u16 last_xpos;
  
@@ -1168,7 +1268,7 @@ index d795ddf..65cc7fc 100644
  
      if (field_132_f136_idx == MENUPAGE_PLAY)
      {
-@@ -1009,8 +1189,14 @@ void Frontend::DrawMenu_4AD140()
+@@ -1009,8 +1186,14 @@ void Frontend::DrawMenu_4AD140()
          {
              u16 idx = pMenuPage->field_4_options_array[0].field_6E_horizontal_selected_idx;
              selected_option_idx = idx;
@@ -1183,7 +1283,7 @@ index d795ddf..65cc7fc 100644
  
              if (unk_xpos == 10)
              {
-@@ -1140,6 +1326,14 @@ void Frontend::DrawMenu_4AD140()
+@@ -1140,6 +1323,14 @@ void Frontend::DrawMenu_4AD140()
  
              x_pos = pMenuOption->field_2_x_pos;
              y_pos = pMenuOption->field_4_y_pos;
@@ -1198,7 +1298,7 @@ index d795ddf..65cc7fc 100644
  
              if (option_idx == pMenuPage->field_BC6_current_option_idx)
              {
-@@ -1241,9 +1435,13 @@ void Frontend::DrawMenu_4AD140()
+@@ -1241,9 +1432,13 @@ void Frontend::DrawMenu_4AD140()
          else
          {
              bool v45 = false;
@@ -1212,7 +1312,7 @@ index d795ddf..65cc7fc 100644
              {
                  v45 = true;
              }
-@@ -1306,7 +1504,7 @@ void Frontend::DrawMenu_4AD140()
+@@ -1306,7 +1501,7 @@ void Frontend::DrawMenu_4AD140()
          if (pMenuElement->field_1_is_it_displayed)
          {
              u16 font_type;
@@ -1221,7 +1321,7 @@ index d795ddf..65cc7fc 100644
  
              switch (pMenuElement->field_0_element_type)
              {
-@@ -1750,6 +1948,12 @@ void Frontend::UpdateMenuScreen_4B6780()
+@@ -1750,6 +1945,12 @@ void Frontend::UpdateMenuScreen_4B6780()
          {
              field_EE08_menu_screen = Credits_17;
          }
@@ -1234,7 +1334,7 @@ index d795ddf..65cc7fc 100644
          else
          {
              field_EE08_menu_screen = PlayArea1_7;
-@@ -1779,7 +1983,11 @@ void Frontend::ManageCredits_4B7A10()
+@@ -1779,7 +1980,11 @@ void Frontend::ManageCredits_4B7A10()
      {
          if (!field_C9B3_key_held)
          {
@@ -1246,7 +1346,7 @@ index d795ddf..65cc7fc 100644
              return;
          }
      }
-@@ -1798,7 +2006,11 @@ void Frontend::ManageCredits_4B7A10()
+@@ -1798,7 +2003,11 @@ void Frontend::ManageCredits_4B7A10()
              {
                  if (++field_1EB38_credits_line_idx == 600)
                  {
@@ -1258,7 +1358,7 @@ index d795ddf..65cc7fc 100644
                      return;
                  }
                  if ((field_1EB34_credits_ypos += Fix16(field_EE0E_credits.field_2_lines[field_1EB38_credits_line_idx].field_4_y_gap)) > 262124)
-@@ -1894,7 +2106,11 @@ void Frontend::UpdatePageFromUserInput_4AE2D0()
+@@ -1894,7 +2103,11 @@ void Frontend::UpdatePageFromUserInput_4AE2D0()
                      }
                      else
                      {
@@ -1270,7 +1370,7 @@ index d795ddf..65cc7fc 100644
                      }
                      field_EE08_menu_screen = RedBar_16;
                      field_110_state = FrontendState::Booting_Map_2;
-@@ -1935,6 +2151,12 @@ void Frontend::UpdatePageFromUserInput_4AE2D0()
+@@ -1935,6 +2148,12 @@ void Frontend::UpdatePageFromUserInput_4AE2D0()
              }
              snd1_67D818.field_0_object_type = 5;
          }
@@ -1283,7 +1383,7 @@ index d795ddf..65cc7fc 100644
          else if (field_132_f136_idx == MENUPAGE_PLAY && pBorg->field_BC6_current_option_idx == 0) // player
          {
              field_110_state = FrontendState::User_Typing_New_Player_Name_3;
-@@ -1952,10 +2174,18 @@ void Frontend::UpdatePageFromUserInput_4AE2D0()
+@@ -1952,10 +2171,18 @@ void Frontend::UpdatePageFromUserInput_4AE2D0()
      {
          switch (field_132_f136_idx)
          {
@@ -1302,7 +1402,7 @@ index d795ddf..65cc7fc 100644
              case MENUPAGE_PLAY:
              case MENUPAGE_DEAD:
              case MENUPAGE_AREA_COMPLETE:
-@@ -1969,7 +2199,11 @@ void Frontend::UpdatePageFromUserInput_4AE2D0()
+@@ -1969,7 +2196,11 @@ void Frontend::UpdatePageFromUserInput_4AE2D0()
                  ChangeMenuPage_4B3170(MENUPAGE_PLAY);
                  break;
              default:
@@ -1314,7 +1414,7 @@ index d795ddf..65cc7fc 100644
                  break;
          }
          snd1_67D818.field_0_object_type = 6;
-@@ -2011,6 +2245,16 @@ void Frontend::UpdatePageFromUserInput_4AE2D0()
+@@ -2011,6 +2242,16 @@ void Frontend::UpdatePageFromUserInput_4AE2D0()
                      snd1_67D818.field_0_object_type = 3;
                  }
              }
@@ -1331,7 +1431,7 @@ index d795ddf..65cc7fc 100644
              pBorg = v18;
          }
          else if (field_132_f136_idx == MENUPAGE_PLAY)
-@@ -2053,6 +2297,16 @@ void Frontend::UpdatePageFromUserInput_4AE2D0()
+@@ -2053,6 +2294,16 @@ void Frontend::UpdatePageFromUserInput_4AE2D0()
                      snd1_67D818.field_0_object_type = 4;
                  }
              }
@@ -1348,7 +1448,7 @@ index d795ddf..65cc7fc 100644
              pBorg = v18;
          }
          else if (field_132_f136_idx == MENUPAGE_PLAY)
-@@ -3102,7 +3356,14 @@ void Frontend::DrawBackground_4B6E10()
+@@ -3102,7 +3353,14 @@ void Frontend::DrawBackground_4B6E10()
      }
      else
      {
@@ -1363,7 +1463,7 @@ index d795ddf..65cc7fc 100644
  
          // Left side
          s32 blitRet = pgbh_BlitImage(tgaArray_61F0C8[tga_idx].field_84_img, 0, 0, 278, 480, 0, 0);
-@@ -3228,10 +3489,26 @@ void Frontend::GetTgaIdxsForMenuScreen_4B6B00(u8 a1, BYTE* pTgaIdx, BYTE* a3)
+@@ -3228,10 +3486,26 @@ void Frontend::GetTgaIdxsForMenuScreen_4B6B00(u8 a1, BYTE* pTgaIdx, BYTE* a3)
      }
  }
  
@@ -1390,7 +1490,7 @@ index d795ddf..65cc7fc 100644
  
      FILE* hFile = crt::fopen(tgaArray_61F0C8[idx].field_0_tga_name, "rb");
      if (!hFile)
-@@ -3533,11 +3810,19 @@ void Frontend::SetupMenuStringsOptionsElements_4B0220()
+@@ -3533,11 +3807,19 @@ void Frontend::SetupMenuStringsOptionsElements_4B0220()
      wcsncpy(field_136_menu_pages_array[0].field_4_options_array[1].field_6_option_name_str,
              gText_0x14_704DFC->Find_5B5F90("options"),
              0x32u);
@@ -1410,7 +1510,7 @@ index d795ddf..65cc7fc 100644
      field_136_menu_pages_array[0].field_4_options_array[2].field_80_menu_page_target = 9;
      field_136_menu_pages_array[0].field_B8A[0].field_0 = 280;
      field_136_menu_pages_array[0].field_B8A[0].field_2 = 258;
-@@ -4085,6 +4370,55 @@ void Frontend::SetupMenuStringsOptionsElements_4B0220()
+@@ -4085,6 +4367,55 @@ void Frontend::SetupMenuStringsOptionsElements_4B0220()
      field_136_menu_pages_array[14].field_B8A[0].field_2 = 348; //  TODO: check for wrong var
      field_136_menu_pages_array[14].field_BC6_current_option_idx = 0;
      field_136_menu_pages_array[14].field_BC8_default_option_idx = 0;
@@ -1422,7 +1522,7 @@ index d795ddf..65cc7fc 100644
 +        pg.field_2_number_of_elements = N64_OPT_ROWS * 2;
 +        const char lg = gText_0x14_704DFC->field_10_lang_code;
 +        // the text comes from the .gxt of each language (assets/lang/menu.tsv, added by tools/lang_gxt.py)
-+        static const char_type* const kNames[N64_OPT_ROWS] = {"n64mus", "n64efx", "n64lang", "n64tod", "n64mode", "n64lim", "n64rmb", "n64pop"};
++        static const char_type* const kNames[N64_OPT_ROWS] = {"n64mus", "n64efx", "n64lang", "n64tod", "n64mode", "n64lim", "n64rmb", "n64pop", "n64traf"};
 +        for (s32 o = 0; o < N64_OPT_ROWS; o++)
 +        {
 +            menu_option_0x82& op = pg.field_4_options_array[o];
@@ -1432,7 +1532,7 @@ index d795ddf..65cc7fc 100644
 +            wcsncpy(op.field_6_option_name_str, gText_0x14_704DFC->Find_5B5F90(kNames[o]), 0x32u);
 +            op.field_6E_horizontal_selected_idx = (o == 2) ? (u16)N64_LangIdx(lg) : (o == 3 ? (u16)gta2_n64_get_lights() : (o == 4 ? (u16)gta2_n64_get_mode() : (o == 5 ? (u16)gta2_n64_get_fps_limit() : 10)));
 +            op.field_70 = 0;
-+            op.field_7E_horizontal_max_idx = (o == 7) ? 2 : ((o >= 2) ? 1 : 10);
++            op.field_7E_horizontal_max_idx = (o >= 7) ? 2 : ((o >= 2) ? 1 : 10);
 +            for (u16 k = 0; k <= op.field_7E_horizontal_max_idx; k++)
 +            {
 +                op.field_72_horizontal_idx_enabled[k] = 1;
@@ -1481,20 +1581,24 @@ index b09cf6b..5772db5 100644
      #define EXTERN_GLOBAL(type, name) extern type name
      #define EXTERN_GLOBAL_ARRAY(type, name, size) extern type name[size]
 diff --git a/Source/Game_0x40.cpp b/Source/Game_0x40.cpp
-index 355af99..e8133ce 100644
+index 355af99..d202dbe 100644
 --- a/Source/Game_0x40.cpp
 +++ b/Source/Game_0x40.cpp
-@@ -375,6 +375,9 @@ void Game_0x40::DebugShowCarStatsAndFrameSkip_4B9270()
+@@ -375,6 +375,13 @@ void Game_0x40::DebugShowCarStatsAndFrameSkip_4B9270()
      }
  }
  
 +#ifdef N64
 +extern "C" void gta2_frame_set_hud(int on); // frame_n64.cpp: HUD commands are drawn sharp
 +#endif
++#if N64_DEBUG_OVERLAY
++extern "C" u32 gta2_prof_now(void); // render_n64.c: where the time of a frame goes
++extern "C" void gta2_prof_add(int which, u32 t0);
++#endif
  MATCH_FUNC(0x4B92D0)
  void Game_0x40::Draw_4B92D0()
  {
-@@ -390,6 +393,9 @@ void Game_0x40::Draw_4B92D0()
+@@ -390,6 +397,9 @@ void Game_0x40::Draw_4B92D0()
  
      MakeScreenTableAndSetWindow_5D7D30();
  
@@ -1504,21 +1608,99 @@ index 355af99..e8133ce 100644
      pgbh_BeginScene();
  
      gpMapRenderer_6F66E4->Draw_4F6A20(); // Note: Also seems to draw sprites
-@@ -399,7 +405,13 @@ void Game_0x40::Draw_4B92D0()
+@@ -399,7 +409,19 @@ void Game_0x40::Draw_4B92D0()
          gExplodingScorePool->DrawExplodingScores_5969E0();
      }
  
 +#ifdef N64
 +    gta2_frame_set_hud(1);
 +#endif
++#if N64_DEBUG_OVERLAY
++    const u32 n64_prof_t0 = gta2_prof_now();
++#endif
      gHud_2B00_706620->DrawGui_5D6860(); // user
++#if N64_DEBUG_OVERLAY
++    gta2_prof_add(16, n64_prof_t0); // PROF_HUD
++#endif
 +#ifdef N64
 +    gta2_frame_set_hud(0);
 +#endif
  
      if (bDo_mike_67D5CC)
      {
-@@ -933,7 +945,12 @@ void Game_0x40::ReduceTrafficSpawnCounterOfOtherViewers_4B9D60(Sprite* a2, Playe
+@@ -466,9 +488,25 @@ void Game_0x40::UpdatePaused_4B93C0()
+     }
+ }
+ 
++#if N64_DEBUG_OVERLAY
++// For the overlay: what part of the game logic takes the time. The numbers are PROF_* in render_n64.c
++#define N64_PROF_ZONE(which, code)                 \
++    do                                             \
++    {                                              \
++        const u32 n64_prof_t0 = gta2_prof_now();   \
++        code;                                      \
++        gta2_prof_add(which, n64_prof_t0);         \
++    } while (0)
++#else
++#define N64_PROF_ZONE(which, code) code
++#endif
++
+ MATCH_FUNC(0x4B9410)
+ void Game_0x40::UpdateGame_4B9410()
+ {
++#if N64_DEBUG_OVERLAY
++    const u32 n64_players_t0 = gta2_prof_now();
++#endif
+     Player** ppPlayerIter = field_4_players;
+     u32 i = 0;
+     while (i < field_23_num_players)
+@@ -481,6 +519,9 @@ void Game_0x40::UpdateGame_4B9410()
+         ppPlayerIter++;
+     }
+ 
++#if N64_DEBUG_OVERLAY
++    gta2_prof_add(7, n64_players_t0);
++#endif
+     gCollisionSoundQueue_66AFE0->Reset_40BB90();
+     gCollisionCounters_6791FC->ResetCount_478A20();
+ 
+@@ -492,10 +533,10 @@ void Game_0x40::UpdateGame_4B9410()
+     gCranePool_D9C_679FD4->CranesService_480E50();
+     gCrusherPool_94_67A830->CrushersService_4887F0();
+     gGeneratorPool_14AC_67E5D0->GeneratorsService_4C1D70();
+-    gPedManager_6787BC->PedsService_4703F0();
++    N64_PROF_ZONE(8, gPedManager_6787BC->PedsService_4703F0());
+     gPublicTransport_181C_6FF1D4->PublicTransportService_57A7A0(); // trains & buses
+     gGarage_48_6FD26C->GaragesService_5349D0();
+-    gCar_6C_677930->CarsService_446790();
++    N64_PROF_ZONE(9, gCar_6C_677930->CarsService_446790());
+ 
+     if (bDo_mike_67D5CC)
+     {
+@@ -507,11 +548,11 @@ void Game_0x40::UpdateGame_4B9410()
+         gTrafficLights_194_705958->TrafficLightsService_5C2950(); // traffic lights
+     }
+ 
+-    gObject_5C_6F8F84->ObjectsService_5293A0();
++    N64_PROF_ZONE(10, gObject_5C_6F8F84->ObjectsService_5293A0());
+ 
+     if (!bSkip_mission_67D4E5)
+     {
+-        gScriptManager_6F8060->ExecuteScriptThreads_5127A0(); // missions
++        N64_PROF_ZONE(11, gScriptManager_6F8060->ExecuteScriptThreads_5127A0()); // missions
+     }
+ 
+     gEmergencyCrewPool_706280->ServiceAll_5CBBD0();
+@@ -580,7 +621,7 @@ s8 Game_0x40::ExecuteGame_4B9640()
+             UpdateGame_4B9410();
+             if (!bSkip_audio_67D6BE)
+             {
+-                gRoot_sound_66B038.Service_40EFA0();
++                N64_PROF_ZONE(12, gRoot_sound_66B038.Service_40EFA0());
+             }
+             break;
+ 
+@@ -933,7 +974,12 @@ void Game_0x40::ReduceTrafficSpawnCounterOfOtherViewers_4B9D60(Sprite* a2, Playe
      }
  }
  
@@ -1929,7 +2111,7 @@ index e8cef45..4850d11 100644
  
      EXPORT void StaticShutdown_4CDCD0(); // static dtor
 diff --git a/Source/MapRenderer.cpp b/Source/MapRenderer.cpp
-index a73a45f..e079582 100644
+index a73a45f..dc7eb2b 100644
 --- a/Source/MapRenderer.cpp
 +++ b/Source/MapRenderer.cpp
 @@ -114,7 +114,7 @@ static inline f32 Fix16ToF32_P3(const Fix16& v)
@@ -2175,6 +2357,31 @@ index a73a45f..e079582 100644
              {
                  gTileDrawFlags_6F6560 = gTileDrawFlags_6F6560 | 0x80;
              }
+@@ -3525,6 +3525,10 @@ static inline void AddToDrawListByVal(MapRenderer* pThis, s32 x, s32 y)
+ 
+ // https://decomp.me/scratch/VJVUz
+ WIP_FUNC(0x4f6a20)
++#if N64_DEBUG_OVERLAY
++extern "C" u32 gta2_prof_now(void); // render_n64.c: where the time of a frame goes
++extern "C" void gta2_prof_add(int which, u32 t0);
++#endif
+ void MapRenderer::Draw_4F6A20()
+ {
+     WIP_IMPLEMENTED;
+@@ -3541,7 +3545,13 @@ void MapRenderer::Draw_4F6A20()
+     {
+         if (zLayer != 0)
+         {
++#if N64_DEBUG_OVERLAY
++            const u32 n64_prof_t0 = gta2_prof_now();
++#endif
+             gSpriteRenderer_67B580->Draw_495560(zLayer); // draw all sprites at zLayer
++#if N64_DEBUG_OVERLAY
++            gta2_prof_add(15, n64_prof_t0); // PROF_SPRITES
++#endif
+         }
+ 
+         // render blocks
 diff --git a/Source/MapRenderer.hpp b/Source/MapRenderer.hpp
 index 1aeda88..1652925 100644
 --- a/Source/MapRenderer.hpp
@@ -3985,14 +4192,13 @@ new file mode 100644
 index 0000000..10defd3
 --- /dev/null
 +++ b/Source/n64_population.h
-@@ -0,0 +0,32 @@
+@@ -0,0 +1,31 @@
 +#pragma once
 +// N64 tech demo population: percentage of the ORIGINAL amount of pedestrians and cars (100 = same as PC).
-+// Adjust only this number: 60 = 40% fewer people and cars. -DN64_POP_PCT=50 can be passed in the Makefile.
++// Cars: on N64 chosen on the Options page, low, medium or high (Char_Pool.cpp).
 +#ifdef N64
-+#ifndef N64_POP_PCT
-+#define N64_POP_PCT 40
-+#endif
++extern "C" int gta2_n64_car_pct(void);
++#define N64_POP_PCT gta2_n64_car_pct()
 +#else
 +#define N64_POP_PCT 100
 +#endif
@@ -4324,10 +4530,71 @@ index 263f693..ccb0ec8 100644
  EXTERN_GLOBAL(Sprite_8*, gSprite_8_703820);
  
 diff --git a/Source/text_0x14.cpp b/Source/text_0x14.cpp
-index 78c7432..b6c2733 100644
+index 78c7432..2605bc5 100644
 --- a/Source/text_0x14.cpp
 +++ b/Source/text_0x14.cpp
-@@ -198,7 +198,11 @@ u16 text_0x14::ToUpper_5B5AD0(wchar_t a2)
+@@ -1,4 +1,5 @@
+ #include "text_0x14.hpp"
++#include <new>
+ #include "Function.hpp"
+ #include "chunk.hpp"
+ #include "error.hpp"
+@@ -82,12 +83,36 @@ void text_0x14::RemapExtendedChars_5B5930(wchar_t* pStr)
+     }
+ }
+ 
++#ifdef N64
++// The text of a language takes a single block of over 300 KB. Freeing it and asking for another one when the language changes could fail, however
++// much RAM was free in smaller pieces, so the blocks stay and are reused: they are created with room for the longest language.
++// nothrow: only with it can the compiler not assume that new succeeded, and the test after it stays in the code.
++#define N64_TEXT_SPARE_KEYS 64u
++#define N64_TEXT_SPARE_BYTES (16u * 1024u)
++static inline bool N64_TextFits(u32 size, u32 capacity, bool allocated)
++{
++    return allocated && size <= capacity;
++}
++#endif
++
+ MATCH_FUNC(0x5B5960)
+ void text_0x14::TKEY_Load_5B5960(u32 chunkSize)
+ {
+     // TODO: probably an inline
+     field_0_tKey.field_4_tKey_count = chunkSize / sizeof(text_0xC);
++#ifdef N64
++    // Changing language reads over the same block (see N64_TextFits)
++    static u32 sCapacity;
++    if (!N64_TextFits(chunkSize, sCapacity, field_0_tKey.field_0_tKey != NULL))
++    {
++        delete[] field_0_tKey.field_0_tKey;
++        sCapacity = field_0_tKey.field_4_tKey_count + N64_TEXT_SPARE_KEYS;
++        field_0_tKey.field_0_tKey = new (std::nothrow) text_0xC[sCapacity];
++        sCapacity *= sizeof(text_0xC);
++    }
++#else
+     field_0_tKey.field_0_tKey = new text_0xC[field_0_tKey.field_4_tKey_count];
++#endif
+     if (!field_0_tKey.field_0_tKey)
+     {
+         FatalError_4A38C0(Gta2Error::OutOfMemoryNewOperator, "C:\\Splitting\\Gta2\\Source\\text.cpp", 218);
+@@ -152,7 +177,17 @@ MATCH_FUNC(0x5B5A80)
+ void text_tdat::TDAT_Load_5B5A80(u32 size)
+ {
+     field_4_len = size / sizeof(wchar_t);
++#ifdef N64
++    static u32 sCapacity;
++    if (!N64_TextFits(size, sCapacity, field_0_data != NULL))
++    {
++        delete[] field_0_data;
++        sCapacity = size + N64_TEXT_SPARE_BYTES;
++        field_0_data = new (std::nothrow) BYTE[sCapacity];
++    }
++#else
+     field_0_data = new BYTE[field_4_len * sizeof(wchar_t)];
++#endif
+ 
+     if (!field_0_data)
+     {
+@@ -198,7 +233,11 @@ u16 text_0x14::ToUpper_5B5AD0(wchar_t a2)
              }
              if (a2 >= 0x80 && a2 <= 0xFF)
              {
@@ -4339,7 +4606,7 @@ index 78c7432..b6c2733 100644
              }
              break;
      }
-@@ -395,13 +399,20 @@ bool text_0x14::KeyExists_5B5FA0(const char_type* pIdStr)
+@@ -395,6 +434,13 @@ bool text_0x14::KeyExists_5B5FA0(const char_type* pIdStr)
      return TKeyFind_5B59E0(pIdStr);
  }
  
@@ -4353,14 +4620,7 @@ index 78c7432..b6c2733 100644
  MATCH_FUNC(0x5B5FB0)
  text_0x14::text_0x14()
  {
-     gRegistry_6FF968.Get_Option_586F00("language", reinterpret_cast<BYTE*>(gTmpBuffer_67C598), sizeof(gTmpBuffer_67C598));
- 
-     if (gTmpBuffer_67C598[0] == 'e' || gTmpBuffer_67C598[0] == 'f' || gTmpBuffer_67C598[0] == 'g' || gTmpBuffer_67C598[0] == 'i' ||
-         gTmpBuffer_67C598[0] == 's' || gTmpBuffer_67C598[0] == 'j' || gTmpBuffer_67C598[0] == 'r')
-     {
-         field_10_lang_code = gTmpBuffer_67C598[0];
-     }
-@@ -409,6 +420,9 @@ text_0x14::text_0x14()
+@@ -409,6 +455,9 @@ text_0x14::text_0x14()
      {
          field_10_lang_code = 'e';
      }
@@ -4371,10 +4631,48 @@ index 78c7432..b6c2733 100644
  
  // Only gets its EH frame when <new> isn't included, see Globals.hpp
 diff --git a/Source/winmain.cpp b/Source/winmain.cpp
-index a150294..7e1d36c 100644
+index a150294..1bd0e1d 100644
 --- a/Source/winmain.cpp
 +++ b/Source/winmain.cpp
-@@ -1560,6 +1560,11 @@ GUID IID_IDirectDrawSurface4_ = {0x0B2B8630, 0xAD35, 0x11D0, 0x8E, 0xA6, 0x00, 0
+@@ -1013,11 +1013,22 @@ EXPORT void __stdcall ApplyChangedScreenSettings_5D9690()
+     Input_MouseAcquire_5D7C60();
+ }
+ 
++#if N64_DEBUG_OVERLAY
++extern "C" u32 gta2_prof_now(void); // render_n64.c: where the time of a frame goes
++extern "C" void gta2_prof_add(int which, u32 t0);
++#endif
++
+ // TODO: order
+ MATCH_FUNC(0x4DA780)
+ EXPORT char ExecuteGame_4DA780()
+ {
++#if N64_DEBUG_OVERLAY
++    const u32 prof_t0 = gta2_prof_now();
++#endif
+     char v0 = gGame_0x40_67E008->ExecuteGame_4B9640();
++#if N64_DEBUG_OVERLAY
++    gta2_prof_add(0, prof_t0); // PROF_LOGIC
++#endif
+     if (gFpsCounter_7055D4)
+     {
+         gFpsCounter_7055D4->field_18_execute_game_timer.AccumulateElapsed_5BEBF0();
+@@ -1028,8 +1039,14 @@ EXPORT char ExecuteGame_4DA780()
+ MATCH_FUNC(0x4DA7B0)
+ void __stdcall Draw_4DA7B0()
+ {
++#if N64_DEBUG_OVERLAY
++    const u32 prof_t0 = gta2_prof_now();
++#endif
+     gGame_0x40_67E008->Draw_4B92D0();
+     pVid_FlipBuffers(gVidSys_7071D0);
++#if N64_DEBUG_OVERLAY
++    gta2_prof_add(1, prof_t0); // PROF_DRAW
++#endif
+     if (bSkip_lid_67D546 || bSkip_top_67D574 || bSkip_bottom_67D4E7 || bSkip_left_67D6BF || bSkip_right_67D4E4)
+     {
+         pVid_ClearScreen(gVidSys_7071D0, 0, 0, 0, 0, 0, gVidSys_7071D0->field_48_rect_right, gVidSys_7071D0->field_4C_rect_bottom);
+@@ -1560,6 +1577,11 @@ GUID IID_IDirectDrawSurface4_ = {0x0B2B8630, 0xAD35, 0x11D0, 0x8E, 0xA6, 0x00, 0
  MATCH_FUNC(0x4C4EC0)
  EXPORT void __stdcall GetDirectXVersion_4C4EC0(u32* pDXVer, u32* osKind)
  {
@@ -4386,7 +4684,7 @@ index a150294..7e1d36c 100644
      HMODULE hDInput; // eax
      FARPROC pDirectInputCreateA; // ebx
      HMODULE hDDraw; // eax
-@@ -1728,6 +1733,7 @@ EXPORT void __stdcall GetDirectXVersion_4C4EC0(u32* pDXVer, u32* osKind)
+@@ -1728,6 +1750,7 @@ EXPORT void __stdcall GetDirectXVersion_4C4EC0(u32* pDXVer, u32* osKind)
      {
          *pDXVer = 0x601;
      }
@@ -4394,7 +4692,7 @@ index a150294..7e1d36c 100644
  }
  
  const char_type* kDefaultDllNames_626A00[2] = {"d3ddll.dll", "dmavideo.dll"};
-@@ -1923,6 +1929,10 @@ EXPORT void __stdcall ParseCommandLine_4DA320(char_type* pCommandLine)
+@@ -1923,6 +1946,10 @@ EXPORT void __stdcall ParseCommandLine_4DA320(char_type* pCommandLine)
  MATCH_FUNC(0x5E4DE0)
  EXPORT void Start_GTA2Manager_5E4DE0()
  {
@@ -4405,7 +4703,7 @@ index a150294..7e1d36c 100644
      ShowWindow(gHwnd_707F04, SW_SHOWMINNOACTIVE);
      HANDLE hMutex = OpenMutexA(MUTEX_ALL_ACCESS, 0, "GBH_BOB_MUTEX");
      if (hMutex)
-@@ -2227,6 +2237,13 @@ EXPORT LRESULT __stdcall WindowProc_5E4EE0(HWND hWnd, UINT Msg, WPARAM wParam, L
+@@ -2227,6 +2254,13 @@ EXPORT LRESULT __stdcall WindowProc_5E4EE0(HWND hWnd, UINT Msg, WPARAM wParam, L
  }
  
  MATCH_FUNC(0x5E53F0)
@@ -4419,7 +4717,7 @@ index a150294..7e1d36c 100644
  s32 __stdcall WinMain_5E53F0(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, s32 nShowCmd)
  {
      //hInstance_ = hInstance;
-@@ -2347,6 +2364,10 @@ s32 __stdcall WinMain_5E53F0(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR
+@@ -2347,6 +2381,10 @@ s32 __stdcall WinMain_5E53F0(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR
          gRegistry_6FF968.Clear_Or_Delete_Sound_Setting_586BF0("do_3d_sound", gRoot_sound_66B038.Get3DSound_40F180());
      }
  
@@ -4430,7 +4728,7 @@ index a150294..7e1d36c 100644
      u8 bQuit = 0; //  %bl
  
      while (1)
-@@ -2510,6 +2531,214 @@ s32 __stdcall WinMain_5E53F0(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR
+@@ -2510,6 +2548,214 @@ s32 __stdcall WinMain_5E53F0(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR
      return 0;
  }
  
@@ -4645,7 +4943,7 @@ index a150294..7e1d36c 100644
  // TODO: order
  MATCH_FUNC(0x4DA740)
  EXPORT void __stdcall Shutdown_4DA740()
-@@ -2626,6 +2855,11 @@ EXPORT char_type __stdcall Start_NetworkGame_5E5A30(HINSTANCE hInstance)
+@@ -2626,6 +2872,11 @@ EXPORT char_type __stdcall Start_NetworkGame_5E5A30(HINSTANCE hInstance)
  MATCH_FUNC(0x5E5D60)
  EXPORT void __stdcall GetGTA2Version_5E5D60(s32* pVerMinor, s32* pVerMajor)
  {
@@ -4657,7 +4955,7 @@ index a150294..7e1d36c 100644
      DWORD dwHandle;
      DWORD dwSize = GetFileVersionInfoSizeA("GTA2.EXE", &dwHandle);
      BYTE* pAlloc = new BYTE[dwSize];
-@@ -2639,4 +2873,5 @@ EXPORT void __stdcall GetGTA2Version_5E5D60(s32* pVerMinor, s32* pVerMajor)
+@@ -2639,4 +2890,5 @@ EXPORT void __stdcall GetGTA2Version_5E5D60(s32* pVerMinor, s32* pVerMajor)
          *pVerMajor = pFileInfo->dwProductVersionMS & 0xFFFF;
      }
      delete[] pAlloc;
@@ -4665,7 +4963,7 @@ index a150294..7e1d36c 100644
  }
 \ No newline at end of file
 diff --git a/Source/Frontend.hpp b/Source/Frontend.hpp
-index e7545b9..6bfe602 100644
+index e7545b9..2c51ea3 100644
 --- a/Source/Frontend.hpp
 +++ b/Source/Frontend.hpp
 @@ -127,7 +127,11 @@ struct MenuPage_0xBCA
@@ -4673,10 +4971,25 @@ index e7545b9..6bfe602 100644
      u16 field_2_number_of_elements;
      menu_option_0x82 field_4_options_array[10];
 +#ifdef N64
-+    menu_element_0x6E field_518_elements_array[16]; // the Options page has 8 rows of 2 arrows
++    menu_element_0x6E field_518_elements_array[18]; // the Options page has 9 rows of 2 arrows
 +#else
      menu_element_0x6E field_518_elements_array[15];
 +#endif
      kind_beaver_6 field_B8A[10];
      u16 field_BC6_current_option_idx;
      s16 field_BC8_default_option_idx;
+diff --git a/Source/TrafficLights_194.cpp b/Source/TrafficLights_194.cpp
+index ce99424..818d57a 100644
+--- a/Source/TrafficLights_194.cpp
++++ b/Source/TrafficLights_194.cpp
+@@ -88,8 +88,8 @@ void TrafficLight_20::Init_5C1D00(u8 x, u8 y, u8 w, u8 h)
+         // OK
+         gObject_5C_6F8F84->NewPhysicsObj_5299B0(objects::traffic_light_hull_170, Fix16(x + (w / 2)), Fix16(y) - kFpOne_7055E4, kFpTwo_7055E0 + zpos, kAng180_705762);
+         field_0_north_headlight_obj = gObject_5C_6F8F84->NewPhysicsObj_5299B0(objects::traffic_light_lighting_255,
+-                                                          Fix16(x + (w / 2)) - kFpThreeThirtySeconds_7055FC - kFpOne_7055E4,
+-                                                          Fix16(y),
++                                                          Fix16(x + (w / 2)),
++                                                          Fix16(y) - kFpOne_7055E4 - kFpThreeThirtySeconds_7055FC,
+                                                           zpos + kFpTwo_7055E0,
+                                                           kAng180_705762);
+         field_0_north_headlight_obj->SetSpriteIdOffset_5290C0(0);

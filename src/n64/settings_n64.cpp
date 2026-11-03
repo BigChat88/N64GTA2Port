@@ -18,6 +18,8 @@ extern "C" int gta2_n64_get_rumble(void); // main_n64.c
 extern "C" void gta2_n64_set_rumble(int on);
 extern "C" int gta2_n64_get_population(void); // Char_Pool.cpp
 extern "C" void gta2_n64_set_population(int level);
+extern "C" int gta2_n64_get_traffic(void); // Char_Pool.cpp
+extern "C" void gta2_n64_set_traffic(int level);
 extern char gN64Language; // text_0x14.cpp
 
 namespace
@@ -31,7 +33,7 @@ struct Settings
     uint8_t music, effects, lights, mode, fpsLimit;
     char language;
     // last: files saved before these existed are shorter and stay valid
-    uint8_t rumble, population;
+    uint8_t rumble, population, traffic;
 };
 
 Settings Current()
@@ -46,6 +48,7 @@ Settings Current()
     s.language = gN64Language;
     s.rumble = static_cast<uint8_t>(gta2_n64_get_rumble());
     s.population = static_cast<uint8_t>(gta2_n64_get_population());
+    s.traffic = static_cast<uint8_t>(gta2_n64_get_traffic());
     return s;
 }
 
@@ -76,10 +79,11 @@ extern "C" void gta2_settings_load(void)
     }
     Settings s;
     s.rumble = 1;
-    s.population = 1;
+    s.population = 0;
+    s.traffic = 0;
     const size_t got = fread(&s, 1, sizeof(s), f);
     fclose(f);
-    if (got + 2 < sizeof(s) || memcmp(s.magic, kMagic, sizeof(kMagic)) != 0)
+    if (got + 3 < sizeof(s) || memcmp(s.magic, kMagic, sizeof(kMagic)) != 0)
     {
         return;
     }
@@ -90,6 +94,7 @@ extern "C" void gta2_settings_load(void)
     gta2_n64_set_fps_limit(s.fpsLimit);
     gta2_n64_set_rumble(s.rumble);
     gta2_n64_set_population(s.population);
+    gta2_n64_set_traffic(s.traffic);
     if ((s.language == 'e' || s.language == 's') && LanguageInRom(s.language))
     {
         gN64Language = s.language;

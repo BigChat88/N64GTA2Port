@@ -55,6 +55,17 @@ static int g_ublk_npend;
 static rspq_block_t *g_ublk[CACHE_N];
 static uint8_t g_ublk_n[CACHE_N];
 static int g_ublk_live;
+/* Blocks given up are reused for the next uploads, which are all about the same size, instead of going back to the heap. A slot is reconverted many
+ * times a second in an explosion: creating and freeing a block each time was nearly all the allocation during play (10000 in one session), and
+ * it left the heap with 440 KB free in pieces of 23 KB. They are only freed when none is alive, that is, on a level change. */
+#define UBLK_SPARE_N 32
+static rspq_block_t *g_ublk_spare[UBLK_SPARE_N];
+static int g_ublk_nspare;
+static void ublk_retire(rspq_block_t *b)
+{
+    if (g_ublk_nspare < UBLK_SPARE_N) g_ublk_spare[g_ublk_nspare++] = b;
+    else rspq_block_free(b);
+}
 static void ublk_release(int slot)
 {
     rspq_block_t *b = g_ublk[slot];
@@ -64,7 +75,7 @@ static void ublk_release(int slot)
     --g_ublk_live;
     if (g_ublk_npend >= UBLK_PEND_N) {
         rspq_wait();
-        for (int i = 0; i < g_ublk_npend; ++i) rspq_block_free(g_ublk_pend[i]);
+        for (int i = 0; i < g_ublk_npend; ++i) ublk_retire(g_ublk_pend[i]);
         g_ublk_npend = 0;
     }
     g_ublk_pend[g_ublk_npend] = b;
@@ -75,14 +86,22 @@ static void ublk_release(int slot)
 /* RESERVE for the engine: upload/text blocks are only a speed cache and must not eat the headroom the game needs to allocate
  * at run time (on-demand textures, scripts, sounds): without this the heap slowly filled up and the engine aborted with 'Out of memory'. */
 #ifndef N64_HEAP_RESERVE_KB
-#define N64_HEAP_RESERVE_KB 320
+#define N64_HEAP_RESERVE_KB 128 /* 320 when this RAM also had to hold the 192 KB of cached sounds, now reserved at startup (audio_n64.c) */
 #endif
 #define UBLK_MAX_LIVE 128 /* upload blocks alive at the same time (~2.4 KB each) */
 extern char *__heap_top;
 static int heap_has_room(void)
 {
-    if ((long)(__heap_top - (char *)sbrk(0)) < (long)N64_HEAP_RESERVE_KB * 1024) return 0; /* the headroom not yet requested from the system (past the end of the current heap) */
-    void *p = malloc(24 * 1024);
+    /* All the free RAM, not only what is past the end of the heap: that part drops below the reserve early in a game, however much is free
+     * inside the heap, and the blocks were then never recorded again. mallinfo walks the heap: once per frame at most. */
+    static uint32_t s_free_frame;
+    static long s_free;
+    if (s_free_frame != g_frames + 1) {
+        s_free_frame = g_frames + 1;
+        s_free = (long)(__heap_top - (char *)sbrk(0)) + (long)mallinfo().fordblks;
+    }
+    if (s_free < (long)N64_HEAP_RESERVE_KB * 1024) return 0;
+    void *volatile p = malloc(24 * 1024); /* volatile: otherwise the compiler removes this test, see ensureRoom in frame_n64.cpp */
     if (!p) return 0;
     free(p);
     return 1;
@@ -91,17 +110,60 @@ static void ublk_reap(void)
 {
     for (int i = 0; i < g_ublk_npend; ) {
         if ((uint32_t)(g_frames - g_ublk_pend_f[i]) >= 4u) {
-            rspq_block_free(g_ublk_pend[i]);
+            ublk_retire(g_ublk_pend[i]);
             --g_ublk_npend;
             g_ublk_pend[i] = g_ublk_pend[g_ublk_npend];
             g_ublk_pend_f[i] = g_ublk_pend_f[g_ublk_npend];
         } else ++i;
+    }
+    if (g_ublk_live == 0 && g_ublk_npend == 0) {
+        while (g_ublk_nspare > 0) rspq_block_free(g_ublk_spare[--g_ublk_nspare]);
     }
 }
 
 /* lab options */
 #ifndef N64_DEBUG_OVERLAY
 #define N64_DEBUG_OVERLAY 0 /* 1 = FPS and free RAM on screen */
+#endif
+#if N64_DEBUG_OVERLAY
+/* Where the time of a frame goes, for the overlay. Logic and the game's drawing call are timed in winmain.cpp; the rest of them here:
+ * draw = the game's drawing call, present = this file's part of it, wait = blocked on the display or the RDP, audio = feeding the mixer. */
+enum { PROF_LOGIC, PROF_DRAW, PROF_PRESENT, PROF_WAIT, PROF_AUDIO, PROF_OVERLAY, PROF_TEX,
+       PROF_PLAYERS, PROF_PEDS, PROF_CARS, PROF_OBJECTS, PROF_SCRIPTS, PROF_SOUND,
+       PROF_CAR_POOL, PROF_TRAFFIC, PROF_SPRITES, PROF_HUD, PROF_CAPTURE, PROF_LIGHTS, PROF_N }; /* the engine and gbh_n64.cpp use these numbers */
+enum { CNT_TRI, CNT_RECT, CNT_UPLOAD, CNT_CONV, CNT_MODE, CNT_PERSP, CNT_N };
+static uint32_t g_cnt[CNT_N], g_cnt_sum[CNT_N], g_cnt_avg[CNT_N];
+#define PROF_COUNT(which) (++g_cnt[which])
+enum { PROF_FRAMES = 30 };
+static uint32_t g_prof[PROF_N], g_prof_sum[PROF_N], g_prof_top[PROF_N], g_prof_avg[PROF_N], g_prof_max[PROF_N];
+static int g_prof_frames;
+uint32_t gta2_prof_now(void) { return TICKS_READ(); }
+void gta2_prof_add(int which, uint32_t t0) { g_prof[which] += TICKS_READ() - t0; }
+static void prof_frame_end(void)
+{
+    /* the present of this frame is inside the drawing call still running: it counts in the next one, at most one frame off */
+    for (int i = 0; i < PROF_N; ++i) {
+        g_prof_sum[i] += g_prof[i];
+        if (g_prof[i] > g_prof_top[i]) g_prof_top[i] = g_prof[i];
+        g_prof[i] = 0;
+    }
+    for (int i = 0; i < CNT_N; ++i) { g_cnt_sum[i] += g_cnt[i]; g_cnt[i] = 0; }
+    if (++g_prof_frames >= PROF_FRAMES) {
+        for (int i = 0; i < CNT_N; ++i) { g_cnt_avg[i] = g_cnt_sum[i] / PROF_FRAMES; g_cnt_sum[i] = 0; }
+        for (int i = 0; i < PROF_N; ++i) {
+            g_prof_avg[i] = g_prof_sum[i] / PROF_FRAMES;
+            g_prof_max[i] = g_prof_top[i];
+            g_prof_sum[i] = g_prof_top[i] = 0;
+        }
+        g_prof_frames = 0;
+    }
+}
+/* a part of the frame in milliseconds, from the time of the two that contain it */
+static unsigned prof_ms(uint32_t ticks, uint32_t minus) { return (ticks > minus ? ticks - minus : 0) / (TICKS_PER_SECOND / 1000); }
+#define PROF_TIME(which, code) do { const uint32_t prof_t0 = TICKS_READ(); code; gta2_prof_add(which, prof_t0); } while (0)
+#else
+#define PROF_TIME(which, code) code
+#define PROF_COUNT(which)
 #endif
 #ifndef N64_HUD_SHARP
 #define N64_HUD_SHARP 1
@@ -278,6 +340,7 @@ static int tex_slot(N64Tex *t, float scale, int additive)
     }
     g_next = (slot + 1) % CACHE_N;
     uint16_t *dst = g_cbuf + (size_t)slot * SLOT_U16;
+    PROF_COUNT(CNT_CONV);
 
     uint32_t prgb_ram[256];
     const uint32_t *prgb;
@@ -526,6 +589,7 @@ static int try_texrect(const FVert *p, float sx, float sy, float ts, float tt, i
     if (x1 - x0 < 0.25f || y1 - y0 < 0.25f) { return 1; }
     if (s_persp != 0) { rdpq_mode_persp(0); s_persp = 0; } /* rectangle + perspective on came out flat */
     rdpq_texture_rectangle_scaled(TILE0, x0, y0, x1, y1, s0, t0, s1, t1);
+    PROF_COUNT(CNT_RECT);
 
     return 1;
 }
@@ -535,6 +599,7 @@ static int s_hud;
 static int s_valid, s_tex = -1, s_blend = -1;      /* mode already set on the RDP */
 static int s_up_slot = -1; static uint32_t s_up_ver; /* texture already in TMEM (slot + version): avoids resending */
 #define PERSP_MIN_RATIO 1.25f
+#define COLOUR_SCALE (1.0f / 255.0f)
 
 /* kind 3: menu image (gbh_BlitImage). The half-size copy (RGBA5551, RAM) comes from gbh_n64.cpp; rdpq_tex_blit splits it into
  * pieces that fit in TMEM. Source in pixels of the whole image (cm->rect), destination (cm->first, cm->count) in 640x480 space. */
@@ -591,7 +656,7 @@ static void draw_cmd(const FCmd *cm, const FVert *verts, float sx, float sy, int
         slot = -1;
     } else {
         N64Tex *tx = (N64Tex *)(uintptr_t)cm->texture;
-        slot = tex_slot(tx, cmd_scale(cm, verts, tx, sx, sy), cm->blend == 2);
+        PROF_TIME(PROF_TEX, slot = tex_slot(tx, cmd_scale(cm, verts, tx, sx, sy), cm->blend == 2));
     }
     if (slot < 0 && cm->blend != 0 && cm->texture != TEX_BOX) return; /* no data and translucent: skip */
 
@@ -613,6 +678,8 @@ static void draw_cmd(const FCmd *cm, const FVert *verts, float sx, float sy, int
         if (white) is_tex = 2;
     }
     if (!s_valid || is_tex != s_tex || cm->blend != s_blend || hud + text != s_hud) {
+        PROF_COUNT(CNT_MODE);
+        rdpq_mode_begin(); /* all of it in one update of the RDP registers, not one per call */
         rdpq_set_mode_standard();
         rdpq_mode_persp(0); s_persp = 0; /* enabled triangle by triangle, only where w varies */
         rdpq_mode_filter(text ? FILTER_POINT : FILTER_BILINEAR);
@@ -627,6 +694,7 @@ static void draw_cmd(const FCmd *cm, const FVert *verts, float sx, float sy, int
         if (cm->blend == 1 || (hud && cm->blend == 0 && is_tex)) rdpq_mode_blender(RDPQ_BLENDER((IN_RGB, IN_ALPHA, MEMORY_RGB, INV_MUX_ALPHA)));
         else if (cm->blend == 2) rdpq_mode_blender(RDPQ_BLENDER((IN_RGB, IN_ALPHA, MEMORY_RGB, INV_MUX_ALPHA))); /* PC additive: the RDP overflows the sum (rainbow), so it becomes 75% transparency */
         else                     rdpq_mode_blender(0);
+        rdpq_mode_end();
         s_valid = 1; s_tex = is_tex; s_blend = cm->blend; s_hud = hud + text;
 
     }
@@ -635,13 +703,15 @@ static void draw_cmd(const FCmd *cm, const FVert *verts, float sx, float sy, int
             /* the same texture is already in TMEM */
         } else {
             const CEnt *e = &g_c[slot];
+            PROF_COUNT(CNT_UPLOAD);
             surface_t surf = surface_make(g_cbuf + (size_t)slot * SLOT_U16, FMT_RGBA16, e->pw, e->th, e->pw * 2);
 #if N64_UPLOAD_BLOCKS
             if (g_ublk[slot] && !s_rec) {
                 rspq_block_run(g_ublk[slot]);
 
-            } else if (!s_rec && g_ublk_n[slot] < 255 && ++g_ublk_n[slot] >= 2 && g_ublk_live < UBLK_MAX_LIVE && heap_has_room()) {
-                rspq_block_begin();
+            } else if (!s_rec && g_ublk_n[slot] < 255 && ++g_ublk_n[slot] >= 2 && g_ublk_live < UBLK_MAX_LIVE && (g_ublk_nspare > 0 || heap_has_room())) {
+                if (g_ublk_nspare > 0) rspq_block_begin_reuse(g_ublk_spare[--g_ublk_nspare]);
+                else rspq_block_begin();
                 rdpq_tex_upload(TILE0, &surf, NULL);
                 rspq_block_t *ub = rspq_block_end();
                 if (ub) { g_ublk[slot] = ub; ++g_ublk_live; rspq_block_run(ub); }
@@ -688,20 +758,23 @@ static void draw_cmd(const FCmd *cm, const FVert *verts, float sx, float sy, int
             const uint32_t d = p[k].rgba;
             v[k][0] = p[k].x * sx; v[k][1] = p[k].y * sy;
             if (snap) { v[k][0] = floorf(v[k][0] + 0.5f); v[k][1] = floorf(v[k][1] + 0.5f); }
-            v[k][2] = (float)(d & 0xFF) / 255.0f;
-            v[k][3] = (float)((d >> 8) & 0xFF) / 255.0f;
-            v[k][4] = (float)((d >> 16) & 0xFF) / 255.0f;
-            v[k][5] = (cm->blend == 0) ? 1.0f : (cm->blend == 2) ? 0.75f : (float)(d >> 24) / 255.0f; /* additive: the PC ignored alpha */
+            if (is_tex != 2) { /* the format without shade does not read these. A float division costs about 6 multiplications */
+                v[k][2] = (float)(d & 0xFF) * COLOUR_SCALE;
+                v[k][3] = (float)((d >> 8) & 0xFF) * COLOUR_SCALE;
+                v[k][4] = (float)((d >> 16) & 0xFF) * COLOUR_SCALE;
+                v[k][5] = (cm->blend == 0) ? 1.0f : (cm->blend == 2) ? 0.75f : (float)(d >> 24) * COLOUR_SCALE;
+            } /* additive: the PC ignored alpha */
             const float iw = persp_ok ? p[k].w / wmax : 1.0f;      /* normalized: what matters is the ratio between vertices */
             const float pm = 1.0f;
             v[k][6] = p[k].u * ts * pm + s_tex_ofs; v[k][7] = p[k].v * tt * pm + s_tex_ofs; v[k][8] = iw;
         }
         if (is_tex) { /* perspective only where w really varies; with equal w the result is the same without it */
             const int want = (persp_ok && wr > 1.001f) ? 1 : 0;
-            if (want != s_persp) { rdpq_mode_persp(want != 0); s_persp = want; }
+            if (want != s_persp) { rdpq_mode_persp(want != 0); s_persp = want; PROF_COUNT(CNT_PERSP); }
         }
 
         
+        PROF_COUNT(CNT_TRI);
         if (is_tex == 2)  { rdpq_triangle(&kFmtTexOnly, v[0], v[1], v[2]); }
         else if (is_tex)  rdpq_triangle(&kFmtTex, v[0], v[1], v[2]);
         else              rdpq_triangle(&TRIFMT_SHADE, v[0], v[1], v[2]);
@@ -798,26 +871,46 @@ void gta2_n64_present(const void *cmds_, int cmdCount, const void *verts_, int v
         inited = 1;
         g_active = 1;
     }
+#if N64_DEBUG_OVERLAY
+    const uint32_t prof_present_t0 = TICKS_READ();
+#endif
     ublk_reap();
 
     const FCmd *cmds = (const FCmd *)cmds_;
     const FVert *verts = (const FVert *)verts_;
     if (refWidth <= 0) refWidth = 640;
 
-    gta2_n64_audio_poll();
-    /* the engine presents empty frames while it starts: they would replace the loading screen with a black one */
-    static int s_has_image;
+    PROF_TIME(PROF_AUDIO, gta2_n64_audio_poll());
+#if N64_DEBUG_OVERLAY
+    /* to tell what a lost image was: frames not shown for having no image, game frames with almost nothing, gaps of 0.5 s or more */
+    static unsigned s_dbg_empty, s_dbg_low, s_dbg_long;
+    static uint32_t s_dbg_last_ms;
+    {
+        extern int gta2_game_in_menu(void); /* game_entry.cpp */
+        const uint32_t now_ms = (uint32_t)get_ticks_ms();
+        if (s_dbg_last_ms && now_ms - s_dbg_last_ms >= 500u) ++s_dbg_long;
+        s_dbg_last_ms = now_ms;
+        if (!gta2_game_in_menu() && cmdCount > 0 && cmdCount < 16) ++s_dbg_low;
+    }
+#endif
+    /* the engine presents empty frames, while it starts and at other moments: they must not replace what is on screen with a black image */
     if (s_hold_until_menu) {
         extern int gta2_game_in_menu(void); /* game_entry.cpp */
         if (!gta2_game_in_menu()) return;
         s_hold_until_menu = 0;
-        s_has_image = 0;
     }
-    for (int i = 0; i < cmdCount && !s_has_image; ++i) s_has_image = cmds[i].kind == 0 && cmds[i].count >= 3 && cmds[i].texture != 0;
-    if (!s_has_image) return;
+    int has_image = 0;
+    for (int i = 0; i < cmdCount && !has_image; ++i) has_image = cmds[i].kind == 3 || (cmds[i].kind == 0 && cmds[i].count >= 3 && cmds[i].texture != 0);
+    if (!has_image) {
+#if N64_DEBUG_OVERLAY
+        ++s_dbg_empty;
+#endif
+        return;
+    }
     extern void gta2_n64_update_video_mode(void); /* main_n64.c */
     gta2_n64_update_video_mode();
-    surface_t *disp = display_get();
+    surface_t *disp;
+    PROF_TIME(PROF_WAIT, disp = display_get());
     SCR_W = (float)disp->width;
     SCR_H = (float)disp->height;
     const int IW = (int)disp->width, IH = (int)disp->height;
@@ -843,31 +936,78 @@ void gta2_n64_present(const void *cmds_, int cmdCount, const void *verts_, int v
 
 #if N64_DEBUG_OVERLAY
     {
+        const uint32_t prof_overlay_t0 = TICKS_READ();
         extern int gta2_n64_debug_font(void); /* intro_n64.c */
-        const struct mallinfo mi = mallinfo();
-        const long unclaimed = (long)(__heap_top - (char *)sbrk(0));
+        extern int gta2_n64_get_mode(void); /* Camera.cpp */
+        extern void gta2_cars_status(int *total, int *visible, int *physics, int *idle); /* Car_BC.cpp */
+        int carsTotal, carsVisible, carsPhysics, carsIdle;
+        gta2_cars_status(&carsTotal, &carsVisible, &carsPhysics, &carsIdle);
+        static long s_free_kb, s_heap_kb, s_big_kb; /* mallinfo walks the heap: not every frame, it would count as drawing */
+        if ((g_frames % PROF_FRAMES) == 0) {
+            const struct mallinfo mi = mallinfo();
+            s_heap_kb = mi.fordblks / 1024;
+            s_free_kb = ((long)(__heap_top - (char *)sbrk(0)) + mi.fordblks) / 1024;
+            /* the largest block that can be had right now: what decides if a big allocation fails, however much RAM is free in pieces.
+             * By bisection, to 4 KB. volatile: otherwise the compiler removes the test, see ensureRoom in frame_n64.cpp */
+            long lo = 0, hi = s_free_kb + 4;
+            while (hi - lo > 4) {
+                const long mid = (lo + hi) / 2;
+                void *volatile probe = malloc((size_t)mid * 1024);
+                if (probe) { free(probe); lo = mid; } else hi = mid;
+            }
+            s_big_kb = lo;
+        }
+        extern void gta2_alloc_census_restart(void), gta2_alloc_census_text(char *out, size_t size, int lines); /* alloc_census_n64.cpp */
+        extern int gta2_game_in_menu(void); /* game_entry.cpp */
+        static int s_census_in_menu = 1;
+        static char s_census[192];
+        static unsigned s_rom_kb, s_voices, s_pool_kb;
+        const int census_in_menu = gta2_game_in_menu();
+        if (s_census_in_menu && !census_in_menu) gta2_alloc_census_restart();
+        s_census_in_menu = census_in_menu;
+        if ((g_frames % PROF_FRAMES) == 0) {
+            extern void gta2_n64_audio_detail(unsigned *rom_kb, unsigned *voices, unsigned *pool_kb); /* audio_n64.c */
+            gta2_alloc_census_text(s_census, sizeof(s_census), 6);
+            gta2_n64_audio_detail(&s_rom_kb, &s_voices, &s_pool_kb);
+        }
         rdpq_set_mode_standard();
+        rdpq_text_printf(NULL, gta2_n64_debug_font(), 165, 70, "rom%uK v%u pool%uK\n%s", s_rom_kb, s_voices, s_pool_kb, s_census);
         extern void gta2_ramfs_status(int *flash, int *files, int *dirty, int *stored, int *failed, unsigned *lastSize, unsigned *lastPacked, unsigned *used); /* ramfs_n64.cpp */
         extern void gta2_n64_audio_status(unsigned *clip, unsigned *click, unsigned *rom, unsigned *late); /* audio_n64.c */
+        extern uint32_t gta2_frame_dropped(void); /* frame_n64.cpp */
         unsigned sndClip, sndClick, sndRom, sndLate;
         gta2_n64_audio_status(&sndClip, &sndClick, &sndRom, &sndLate);
         extern void gta2_peds_status(int *walkers, int *limit, int *onScreen); /* Char_Pool.cpp */
+        extern int gta2_n64_get_population(void), gta2_n64_get_traffic(void), gta2_n64_get_lights(void); /* Char_Pool.cpp, gbh_n64.cpp */
         int pedWalkers, pedLimit, pedOnScreen;
         gta2_peds_status(&pedWalkers, &pedLimit, &pedOnScreen);
         int flash, files, dirty, stored, failed;
         unsigned lastSize, lastPacked, used;
         gta2_ramfs_status(&flash, &files, &dirty, &stored, &failed, &lastSize, &lastPacked, &used);
-        rdpq_text_printf(NULL, gta2_n64_debug_font(), 24, 88, "%.1f FPS\nRAM free %ldK\n in heap %dK\n cmds %d\nflash %s f%d\n d%d ok%d err%d\nlast %uB>%uB\nlog %uK/128K\npeds %d/%d scr %d\nsnd c%u k%u r%u l%u",
-                         display_get_fps(), (unclaimed + mi.fordblks) / 1024, mi.fordblks / 1024, cmdCount,
-                         flash ? "YES" : "NO", files, dirty, stored, failed, lastSize, lastPacked, used / 1024, pedWalkers, pedLimit, pedOnScreen, sndClip, sndClick, sndRom, sndLate);
+        rdpq_text_printf(NULL, gta2_n64_debug_font(), 24, 48, "%.1f FPS\nRAM free %ldK\n in heap %ldK\n big %ldK\n cmds %d\npeds %d/%d scr %d\nsnd c%u k%u r%u l%u\nskip %u low %u long %u\ndrop %lu\nms L%u B%u R%u W%u A%u\nmax L%u B%u R%u W%u A%u\nL P%u H%u C%u O%u M%u S%u\nR tri%u rec%u up%u cv%u md%u pr%u\nC n%d v%d f%d i%d up%u gen%u\nB sp%u hu%u cap%u li%u\n%s %s P%c C%c",
+                         display_get_fps(), s_free_kb, s_heap_kb, s_big_kb, cmdCount,
+                         pedWalkers, pedLimit, pedOnScreen, sndClip, sndClick, sndRom, sndLate, s_dbg_empty, s_dbg_low, s_dbg_long, (unsigned long)gta2_frame_dropped(),
+                         prof_ms(g_prof_avg[PROF_LOGIC], 0), prof_ms(g_prof_avg[PROF_DRAW], g_prof_avg[PROF_PRESENT]), prof_ms(g_prof_avg[PROF_PRESENT], g_prof_avg[PROF_WAIT] + g_prof_avg[PROF_AUDIO] + g_prof_avg[PROF_OVERLAY]), prof_ms(g_prof_avg[PROF_WAIT], 0), prof_ms(g_prof_avg[PROF_AUDIO], 0),
+                         prof_ms(g_prof_max[PROF_LOGIC], 0), prof_ms(g_prof_max[PROF_DRAW], g_prof_max[PROF_PRESENT]), prof_ms(g_prof_max[PROF_PRESENT], g_prof_max[PROF_WAIT] + g_prof_max[PROF_AUDIO] + g_prof_max[PROF_OVERLAY]), prof_ms(g_prof_max[PROF_WAIT], 0), prof_ms(g_prof_max[PROF_AUDIO], 0),
+                         prof_ms(g_prof_avg[PROF_PLAYERS], 0), prof_ms(g_prof_avg[PROF_PEDS], 0), prof_ms(g_prof_avg[PROF_CARS], 0), prof_ms(g_prof_avg[PROF_OBJECTS], 0), prof_ms(g_prof_avg[PROF_SCRIPTS], 0), prof_ms(g_prof_avg[PROF_SOUND], 0),
+                         (unsigned)g_cnt_avg[CNT_TRI], (unsigned)g_cnt_avg[CNT_RECT], (unsigned)g_cnt_avg[CNT_UPLOAD], (unsigned)g_cnt_avg[CNT_CONV], (unsigned)g_cnt_avg[CNT_MODE], (unsigned)g_cnt_avg[CNT_PERSP],
+                         carsTotal, carsVisible, carsPhysics, carsIdle, prof_ms(g_prof_avg[PROF_CAR_POOL], 0), prof_ms(g_prof_avg[PROF_TRAFFIC], 0),
+                         prof_ms(g_prof_avg[PROF_SPRITES], 0), prof_ms(g_prof_avg[PROF_HUD], 0), prof_ms(g_prof_avg[PROF_CAPTURE], 0), prof_ms(g_prof_avg[PROF_LIGHTS], 0),
+                         gta2_n64_get_mode() ? "QUALITY" : "PERFORM", gta2_n64_get_lights() ? "DUSK" : "NOON",
+                         "LMH"[gta2_n64_get_population()], "LMH"[gta2_n64_get_traffic()]);
+        gta2_prof_add(PROF_OVERLAY, prof_overlay_t0);
     }
 #endif
-    rdpq_detach_show();
+    PROF_TIME(PROF_WAIT, rdpq_detach_show());
     ++g_frames;
 #ifdef N64_MEMLOG
     { static unsigned peak; unsigned n = 0, cur = 0, wasted = 0; for (int i = 0; i < CACHE_N; ++i) { if (g_c[i].used && g_frames - g_c[i].used < CACHE_GUARD) { ++n; wasted += 4096 - (unsigned)g_c[i].pw * g_c[i].th * 2; } if (g_c[i].used) ++cur; }
       if (n > peak) { peak = n; }
       if ((g_frames % 120) == 0) { unsigned nb = 0; for (int i = 0; i < CACHE_N; ++i) if (g_ublk[i]) ++nb; debugf("[tcache] inuse=%u peak=%u everused=%u wasted=%uKB ublk=%u live=%d headroom=%ldKB\n", n, peak, cur, wasted / 1024, nb, g_ublk_live, (long)(__heap_top - (char *)sbrk(0)) / 1024); } }
 #endif
-    gta2_n64_audio_poll();
+    PROF_TIME(PROF_AUDIO, gta2_n64_audio_poll());
+#if N64_DEBUG_OVERLAY
+    gta2_prof_add(PROF_PRESENT, prof_present_t0);
+    prof_frame_end();
+#endif
 }

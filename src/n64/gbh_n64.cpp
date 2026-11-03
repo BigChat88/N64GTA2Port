@@ -166,6 +166,10 @@ float gAmbient = 255.0f; // ambient * 255, as the original driver keeps it
 #ifndef N64_LIGHTS
 #define N64_LIGHTS 0 /* default = noon (no lights); the menu changes it */
 #endif
+#if N64_DEBUG_OVERLAY
+extern "C" u32 gta2_prof_now(void); // render_n64.c: where the time of a frame goes
+extern "C" void gta2_prof_add(int which, u32 t0);
+#endif
 int gN64Lights = N64_LIGHTS;
 extern "C" int gta2_n64_get_lights(void)
 {
@@ -365,6 +369,9 @@ void Draw(u32 flags, STexture* tex, Vert* v, int count, u32 baseColour)
             v[i].spec = 255;
         }
     }
+#if N64_DEBUG_OVERLAY
+    const u32 prof_lights_t0 = gta2_prof_now();
+#endif
     if (gN64Lights && (flags & kLighting) && gAmbient != 255.0f)
     {
         // The game appends the world-space positions after the screen vertices.
@@ -450,6 +457,10 @@ void Draw(u32 flags, STexture* tex, Vert* v, int count, u32 baseColour)
             }
         }
     }
+#if N64_DEBUG_OVERLAY
+    gta2_prof_add(18, prof_lights_t0); // PROF_LIGHTS
+    const u32 prof_capture_t0 = gta2_prof_now();
+#endif
     const u32 blend = (flags & kAdditive) ? kBlendAdditive : (flags & kAlphaBlend) ? kBlendAlpha : kBlendOpaque;
 #ifdef N64
     // N64: converts the texture now (the engine reuses shared, damage and digit textures within the same frame)
@@ -460,6 +471,9 @@ void Draw(u32 flags, STexture* tex, Vert* v, int count, u32 baseColour)
         const float a_tex = fabsf((v[1].u - v[0].u) * (v[2].v - v[0].v) - (v[2].u - v[0].u) * (v[1].v - v[0].v));
         texId = gta2_n64_tex_capture(reinterpret_cast<N64Tex*>(tex->field_1C_ptr), a_scr, a_tex, blend == kBlendAdditive);
     }
+#if N64_DEBUG_OVERLAY
+    gta2_prof_add(17, prof_capture_t0); // PROF_CAPTURE
+#endif
     if (gta2_n64_tex_token_empty(texId)) // texture with no visible pixel: would draw nothing
     {
         return;

@@ -19,7 +19,10 @@
  * than 5% of their energy that way (one, mostly a 10.3 kHz tone, 87%). At 22 kHz, none lost more than 1%. */
 #define OUT_FREQ    22050
 /* CHAOS CAPS */
-#define CAP_SFX_VOICES   5   /* effects playing at the same time (of NVOICE=8; leaves 2 for loops like engine/siren); full: new effect is dropped */
+#define CAP_SFX_VOICES   5   /* effects playing at the same time, loops included (of NVOICE=8); full: see CAP_SFX_SHOTS */
+#define CAP_SFX_SHOTS    3   /* with that many playing, effects that end by themselves stop adding up: a new one replaces the quietest of them if it is not quieter,
+                              * or is dropped. Sirens and engines alone must not silence the gunshots */
+#define CAP_SFX_VOL_LOUD 100 /* from this volume on an effect is near the player: CAP_SFX_STARTS does not drop it, it competes for a channel like any other */
 #define CAP_SFX_VOL_MIN 20  /* new effect (not infinitely looping) with volume 0..127 below this is dropped: too far away to hear */
 #define CAP_SFX_STARTS 3   /* at most this many new effects per 33 ms window (gunfire/explosion bursts); the rest are dropped */
 #define CAP_SFX_UPD_MS  80  /* volume/pan/pitch of a running effect only update every this many ms (engines) */
@@ -32,7 +35,7 @@ static uint32_t g_ini_t0, g_ini_n;
 /* for the diagnostic overlay: what each kind of crackle would leave behind */
 #define DIAG_CLICK_DELTA 16000       /* a jump this big between two output samples is a click, not sound */
 #define DIAG_LATE_MS     200         /* without a poll for this long, the audio buffers (240 ms) ran dry or nearly so */
-static unsigned g_diag_clip, g_diag_click, g_diag_rom, g_diag_late;
+static unsigned g_diag_clip, g_diag_click, g_diag_rom, g_diag_late, g_diag_rom_len;
 static int g_diag_prev;
 static uint32_t g_diag_poll_t;
 void gta2_n64_audio_status(unsigned *clip, unsigned *click, unsigned *rom, unsigned *late)
@@ -77,7 +80,10 @@ typedef struct {
 
 /* effects cache in RAM: the mixer asks for ~140 bytes at a time, and each ROM DMA costs ~45 us in setup alone */
 #define FXCACHE_MAX      (192u * 1024u) /* total in RAM. 384 KB ate the heap headroom (only ~100 KB free) and caused 'Out of memory'; 256 KB was still tight */
-#define FXCACHE_ITEM_MAX (64u * 1024u)  /* largest sound that enters the cache */
+#define FXCACHE_ITEM_MAX (80u * 1024u)  /* largest sound that enters the cache: the police siren is 79 KB and plays through a whole chase */
+/* One block, reserved before the engine starts. Asking the heap for each sound left it in pieces after a few minutes of play: with 550 KB free the
+ * largest piece was 33 KB, so the larger effects stopped fitting and the mixer went back to reading them from ROM. */
+static uint8_t *g_fxpool;
 static uint32_t g_fxcache_bytes, g_fxcache_tick;
 
 typedef struct {
@@ -87,6 +93,8 @@ typedef struct {
     uint32_t upd_t;       /* ticks of the last volume/pan/pitch update */
     int fading;           /* fading out: silent soon, stopped by the poll once g_mixed reaches fade_end */
     uint32_t fade_end;
+    int volume;           /* last volume asked for */
+    int loop;             /* repeats until the game stops it */
 } Voice;
 
 static Wave g_wave[NWAVE];
@@ -132,6 +140,7 @@ static void wave_read(void *ctx, samplebuffer_t *sbuf, int wpos, int wlen, bool 
         const uint8_t *src = w->data + off;
 #if N64_DEBUG_OVERLAY
         ++g_diag_rom;
+        if (w->len > g_diag_rom_len) g_diag_rom_len = w->len;
 #endif
         if (in_rom(src) && (((uintptr_t)src ^ (uintptr_t)dst) & 1u) == 0u)
             dma_read(dst, (uint32_t)((uintptr_t)src & 0x1FFFFFFFu), have); /* waits for the PI and reads via DMA */
@@ -188,37 +197,87 @@ static Wave *wave_get(const void *data, uint32_t len, int loops, int32_t ls, int
 }
 
 
+void gta2_n64_fx_pool_init(void)
+{
+    g_fxpool = (uint8_t *)memalign(16, FXCACHE_MAX); /* if it fails, every sound plays from ROM */
+}
+
+/* sounds in the pool, by position */
+static Wave *g_fxlist[NWAVE];
+static int g_fxn;
+
+/* whole cache lines for each block only; dma_read requires the same parity in RAM and ROM */
+static inline uint32_t fx_block_size(const Wave *w)
+{
+    return (w->len + (uint32_t)((uintptr_t)w->data & 1u) + 15u) & ~15u;
+}
+
 static void fxcache_free(Wave *w)
 {
     if (!w->ram) return;
     w->ram = NULL; /* before freeing: a following read goes back to ROM */
-    free(w->ram_alloc);
+    int i = 0;
+    while (g_fxlist[i] != w) ++i;
+    --g_fxn;
+    memmove(&g_fxlist[i], &g_fxlist[i + 1], (size_t)(g_fxn - i) * sizeof(g_fxlist[0]));
     w->ram_alloc = NULL;
-    g_fxcache_bytes -= w->len;
+    g_fxcache_bytes -= fx_block_size(w);
+}
+
+/* A place for sz bytes; there is room in total (see fxcache_touch). If it is split in pieces, moves the sounds down to join them. Safe at any moment:
+ * the mixer copies from the pool only inside wave_read, in this same thread, and keeps no pointer to it. */
+static uint8_t *fxpool_place(uint32_t sz, int *pos)
+{
+    uint8_t *end = g_fxpool;
+    for (int i = 0; i < g_fxn; ++i) {
+        uint8_t *blk = (uint8_t *)g_fxlist[i]->ram_alloc;
+        if ((uint32_t)(blk - end) >= sz) { *pos = i; return end; }
+        end = blk + fx_block_size(g_fxlist[i]);
+    }
+    *pos = g_fxn;
+    if ((uint32_t)(g_fxpool + FXCACHE_MAX - end) >= sz) return end;
+    end = g_fxpool;
+    for (int i = 0; i < g_fxn; ++i) {
+        Wave *m = g_fxlist[i];
+        const uint32_t msz = fx_block_size(m);
+        const uint32_t odd = (uint32_t)(m->ram - (uint8_t *)m->ram_alloc);
+        memmove(end, m->ram_alloc, msz);
+        m->ram_alloc = end;
+        m->ram = end + odd;
+        end += msz;
+    }
+    return end;
 }
 
 /* puts the sound in the RAM cache the first time it plays, so that the mixer does not wait on the ROM in the middle of it */
 static void fxcache_touch(Wave *w)
 {
     w->last_use = ++g_fxcache_tick;
-    if (w->ram || !in_rom(w->data) || w->len == 0 || w->len > FXCACHE_ITEM_MAX) return;
-    while (g_fxcache_bytes + w->len > FXCACHE_MAX) { /* frees the least recently used */
+    if (w->ram || !g_fxpool || !in_rom(w->data) || w->len == 0 || w->len > FXCACHE_ITEM_MAX) return;
+    const uint32_t sz = fx_block_size(w);
+    while (g_fxcache_bytes + sz > FXCACHE_MAX) { /* frees the least recently used, except what is playing: a loop that started long ago looks old, and would go on reading from ROM */
         Wave *old = NULL;
-        for (int i = 0; i < g_nwave; ++i)
-            if (g_wave[i].ram && &g_wave[i] != w && (!old || g_wave[i].last_use < old->last_use)) old = &g_wave[i];
+        for (int i = 0; i < g_fxn; ++i) {
+            Wave *c = g_fxlist[i];
+            if (old && c->last_use >= old->last_use) continue;
+            int busy = 0;
+            for (int v = 0; v < NVOICE; ++v) if (g_voice[v].wave == c && mixer_ch_playing(v)) { busy = 1; break; }
+            if (!busy) old = c;
+        }
         if (!old) return;
         fxcache_free(old);
     }
-    const uintptr_t odd = (uintptr_t)w->data & 1u;          /* dma_read requires the same parity in RAM and ROM */
-    const uint32_t sz = (w->len + (uint32_t)odd + 15u) & ~15u; /* whole cache lines for this block only */
-    void *blk = memalign(16, sz);
-    if (!blk) return;
-    uint8_t *ram = (uint8_t *)blk + odd;
+    int pos;
+    uint8_t *blk = fxpool_place(sz, &pos);
+    memmove(&g_fxlist[pos + 1], &g_fxlist[pos], (size_t)(g_fxn - pos) * sizeof(g_fxlist[0]));
+    g_fxlist[pos] = w;
+    ++g_fxn;
+    uint8_t *ram = blk + ((uintptr_t)w->data & 1u);
     data_cache_hit_writeback_invalidate(blk, sz);
     dma_read(ram, (uint32_t)((uintptr_t)w->data & 0x1FFFFFFFu), w->len);
     w->ram_alloc = blk;
     w->ram = ram;
-    g_fxcache_bytes += w->len;
+    g_fxcache_bytes += sz;
 }
 
 static int voice_find(int id)
@@ -293,6 +352,19 @@ static void voice_fade_out(int ch)
     g_voice[ch].fade_end = g_mixed + SFX_DECLICK;
 }
 
+#if N64_DEBUG_OVERLAY
+/* largest sound read from ROM since the last call, voices playing now, KB of sounds in RAM */
+void gta2_n64_audio_detail(unsigned *rom_kb, unsigned *voices, unsigned *pool_kb)
+{
+    *rom_kb = (g_diag_rom_len + 1023u) / 1024u;
+    g_diag_rom_len = 0;
+    unsigned n = 0;
+    for (int c = 0; c < NVOICE; ++c) if (mixer_ch_playing(c)) ++n;
+    *voices = n;
+    *pool_kb = g_fxcache_bytes / 1024u;
+}
+#endif
+
 /* feeds the AI: called a few times per frame (render_n64.c) */
 void gta2_n64_audio_poll(void)
 {
@@ -333,7 +405,7 @@ void gta2_n64_sfx_start(int id, const void *data, int len, int rate, int format,
         const uint32_t now_ticks = timer_ticks();
         if (volume < CAP_SFX_VOL_MIN) { return; }
         if ((uint32_t)(now_ticks - g_ini_t0) > CAP_MS(33)) { g_ini_t0 = now_ticks; g_ini_n = 0; }
-        if (g_ini_n >= CAP_SFX_STARTS) { return; }
+        if (g_ini_n >= CAP_SFX_STARTS && volume < CAP_SFX_VOL_LOUD) { return; }
         ++g_ini_n;
     }
     Wave *w = wave_get(data, bits8 ? (uint32_t)len : (uint32_t)len & ~1u, loops, loop_start, loop_end, bits8);
@@ -341,9 +413,18 @@ void gta2_n64_sfx_start(int id, const void *data, int len, int rate, int format,
     fxcache_touch(w);
     const int old = voice_find(id);
     if (old < 0) {
-        int active_count = 0;
-        for (int c = 0; c < NVOICE; ++c) if (mixer_ch_playing(c) && !g_voice[c].fading) ++active_count;
-        if (active_count >= CAP_SFX_VOICES && loops != 0) { return; } /* cap: drops the new effect (infinitely looping ones, like engine/siren, steal) */
+        int active_count = 0, shots = 0, quietest = -1;
+        for (int c = 0; c < NVOICE; ++c) {
+            if (!mixer_ch_playing(c) || g_voice[c].fading) continue;
+            ++active_count;
+            if (g_voice[c].loop) continue;
+            ++shots;
+            if (quietest < 0 || g_voice[c].volume < g_voice[quietest].volume) quietest = c;
+        }
+        if (active_count >= CAP_SFX_VOICES && loops != 0 && shots >= CAP_SFX_SHOTS) { /* infinitely looping ones, like engine/siren, always enter */
+            if (g_voice[quietest].volume > volume) { return; }
+            voice_fade_out(quietest);
+        }
     } else if (mixer_ch_playing(old)) {
         voice_fade_out(old); /* restart: the old one fades out here and the new one starts on another channel */
     } else {
@@ -359,6 +440,8 @@ void gta2_n64_sfx_start(int id, const void *data, int len, int rate, int format,
     g_voice[ch].id = id;
     g_voice[ch].wave = w;
     g_voice[ch].fading = 0;
+    g_voice[ch].volume = volume;
+    g_voice[ch].loop = loops == 0;
     g_voice[ch].order = ++g_order;
     g_voice[ch].upd_t = timer_ticks();
     mixer_ch_play(ch, &w->wf);
@@ -371,6 +454,7 @@ void gta2_n64_sfx_update(int id, int volume, int pan, int rate)
     if (!g_inited) return;
     const int ch = voice_find(id);
     if (ch >= 0 && mixer_ch_playing(ch)) {
+        g_voice[ch].volume = volume;
         const uint32_t now_ticks = timer_ticks();
         if ((uint32_t)(now_ticks - g_voice[ch].upd_t) < CAP_MS(CAP_SFX_UPD_MS)) return; /* cap: update too frequent */
         g_voice[ch].upd_t = now_ticks;

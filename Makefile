@@ -38,20 +38,23 @@ STAGE_FLAGS = $(if $(MAPS),--maps "$(MAPS)") $(if $(BONUS),--bonus "$(BONUS)") $
 
 ENGINE := $(shell tr -d '\r' < src/game_srcs.txt)
 ENGINE += registry crt_stubs port_static_init
-PLAT   := win32_n64 dinput_n64 crt_n64 settings_n64 miles_n64 bink_n64 gbh_n64 vid_n64 frame_n64 exports_n64 net_n64 n64_extra game_entry ramfs_n64
+PLAT   := win32_n64 dinput_n64 crt_n64 settings_n64 miles_n64 bink_n64 gbh_n64 vid_n64 frame_n64 exports_n64 net_n64 n64_extra game_entry ramfs_n64 alloc_census_n64
 
 ENGINE_OBJS := $(addprefix $(OBJ_DIR)/src/gta2_re/Source/,$(addsuffix .o,$(ENGINE)))
 PLAT_OBJS   := $(addprefix $(OBJ_DIR)/src/n64/,$(addsuffix .o,$(PLAT)))
 OBJS := $(ENGINE_OBJS) $(PLAT_OBJS) $(OBJ_DIR)/src/n64/main_n64.o $(OBJ_DIR)/src/n64/exc_fix.o $(OBJ_DIR)/src/n64/render_n64.o $(OBJ_DIR)/src/n64/audio_n64.o $(OBJ_DIR)/src/n64/intro_n64.o $(OBJ_DIR)/src/n64/logo_n64.o $(OBJ_DIR)/src/n64/savefs_n64.o
 
+# -fcheck-new: operator new returns null here instead of throwing. Without the flag the compiler assumes it succeeded and removes the
+# engine's own out of memory checks, so a failed allocation went on writing at address 0.
 CXX_STD ?= -std=gnu++17
-CXX_ENGINE = $(CXX_STD) -fshort-wchar -fms-extensions -fpermissive -w -DGTA2_PORT=1 -DN64 -fno-exceptions -fno-rtti \
+CXX_ENGINE = $(CXX_STD) -fshort-wchar -fms-extensions -fpermissive -w -DGTA2_PORT=1 -DN64 -fno-exceptions -fno-rtti -fcheck-new \
              -include src/compat/gcc_compat.h -include src/compat/port_prefix.h \
              -Isrc/compat -Isrc/compat_ci -Isrc/n64 -Isrc/gta2_re/Source -Isrc/gta2_re -MMD -MP $(EXTRA_CFLAGS)
 
 # Engine: optimize for size (N64 RAM is the bottleneck; the code takes ~1.9 MB of the 8 MB).
-# Heaviest files per frame (map, sprites, collision, car physics, math): -O2 (faster, larger code).
-HOT_ENGINE := MapRenderer sprite SpriteRenderer_1C SpriteGrid_400 Draw map_0x370 collide CarPhysics_B0 Fix16_Point fix16 ang16 angle
+# Heaviest files per frame (map, sprites, collision, car physics, math, and the logic of pedestrians, cars and objects): -O2 (faster, larger code).
+HOT_ENGINE := MapRenderer sprite SpriteRenderer_1C SpriteGrid_400 Draw map_0x370 collide CarPhysics_B0 Fix16_Point fix16 ang16 angle \
+              Ped Char_Pool PedGroup Car_BC CarAI_78 Object_5C
 HOT_OBJS := $(addprefix $(OBJ_DIR)/src/gta2_re/Source/,$(addsuffix .o,$(HOT_ENGINE)))
 $(filter-out $(HOT_OBJS),$(ENGINE_OBJS)): N64_CXXFLAGS += -Os
 $(HOT_OBJS): N64_CXXFLAGS += -O2
@@ -99,6 +102,10 @@ $(BUILD_DIR)/$(ROM_NAME).dfs: stage-data $(LOGO_SPRITES)
 	$(N64_MKDFS) $@ $(FS_DIR)
 
 $(BUILD_DIR)/$(ROM_NAME).elf: N64_LDFLAGS += $(EXTRA_LDFLAGS)
+# Debug ROMs: the overlay shows who allocates memory (src/n64/alloc_census_n64.cpp).
+ifneq (,$(findstring N64_DEBUG_OVERLAY=1,$(EXTRA_CFLAGS)))
+$(BUILD_DIR)/$(ROM_NAME).elf: N64_LDFLAGS += --wrap=malloc --wrap=calloc --wrap=realloc --wrap=memalign --wrap=free --wrap=_Znwj --wrap=_Znaj
+endif
 $(BUILD_DIR)/$(ROM_NAME).elf: $(OBJS)
 
 -include $(OBJS:.o=.d)
