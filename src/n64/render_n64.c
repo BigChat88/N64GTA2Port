@@ -163,6 +163,60 @@ static uint32_t g_prof[PROF_N], g_prof_sum[PROF_N], g_prof_top[PROF_N], g_prof_a
 static int g_prof_frames;
 uint32_t gta2_prof_now(void) { return TICKS_READ(); }
 void gta2_prof_add(int which, uint32_t t0) { g_prof[which] += TICKS_READ() - t0; }
+/* Where the CPU is, about once per ms: the address the timer interrupt stopped at, by 256-byte pieces of code. Shows the busiest pieces of the last
+ * 4000 samples and, under "mem", the code that spends the most time inside memset and memcpy. They are matched to function names with the debug ROM's .elf. */
+#define PC_BUCKET_SHIFT 8
+#define PC_BUCKETS (0x300000 >> PC_BUCKET_SHIFT)
+#define PC_WINDOW 4000
+#define PC_TOP 8
+#define PC_MEM_TOP 3
+static uint16_t g_pc_hist[PC_BUCKETS], g_pc_mem_hist[PC_BUCKETS];
+static uint32_t g_pc_total;
+static timer_link_t *g_pc_timer;
+static char g_pc_text[(PC_TOP + PC_MEM_TOP + 1) * 12 + 1];
+static void pc_sample(int ovfl)
+{
+    (void)ovfl;
+    extern void *interrupt_exception_frame;
+    const uint32_t pc = ((const reg_block_t *)((const char *)interrupt_exception_frame + 32))->epc - 0x80000000u;
+    if (pc < 0x300000u) ++g_pc_hist[pc >> PC_BUCKET_SHIFT];
+    /* both are leaf functions: ra is who called them. Sizes from the .elf */
+    const uint32_t ms = (uint32_t)(uintptr_t)memset - 0x80000000u, mc = (uint32_t)(uintptr_t)memcpy - 0x80000000u;
+    if (pc - ms < 284u || pc - mc < 880u) {
+        const uint32_t ra = (uint32_t)((const reg_block_t *)((const char *)interrupt_exception_frame + 32))->gpr[31] - 0x80000000u;
+        if (ra < 0x300000u) ++g_pc_mem_hist[ra >> PC_BUCKET_SHIFT];
+    }
+    ++g_pc_total;
+}
+static int pc_print(int w, const uint16_t *hist, int count)
+{
+    int top[PC_TOP];
+    for (int i = 0; i < count; ++i) top[i] = -1;
+    for (int b = 0; b < PC_BUCKETS; ++b) {
+        if (!hist[b]) continue;
+        int slot = count;
+        while (slot > 0 && (top[slot - 1] < 0 || hist[top[slot - 1]] < hist[b])) --slot;
+        if (slot >= count) continue;
+        for (int i = count - 1; i > slot; --i) top[i] = top[i - 1];
+        top[slot] = b;
+    }
+    for (int i = 0; i < count && top[i] >= 0; ++i)
+        w += snprintf(g_pc_text + w, sizeof g_pc_text - (size_t)w, "%06X %2lu\n", (unsigned)(top[i] << PC_BUCKET_SHIFT), (unsigned long)(hist[top[i]] * 100u / g_pc_total));
+    return w;
+}
+static void pc_report(void)
+{
+    if (!g_pc_timer) g_pc_timer = new_timer(TICKS_FROM_US(997), TF_CONTINUOUS, pc_sample);
+    if (g_pc_total < PC_WINDOW) return;
+    disable_interrupts();
+    int w = pc_print(0, g_pc_hist, PC_TOP);
+    w += snprintf(g_pc_text + w, sizeof g_pc_text - (size_t)w, "mem\n");
+    pc_print(w, g_pc_mem_hist, PC_MEM_TOP);
+    memset(g_pc_hist, 0, sizeof g_pc_hist);
+    memset(g_pc_mem_hist, 0, sizeof g_pc_mem_hist);
+    g_pc_total = 0;
+    enable_interrupts();
+}
 static void prof_frame_end(void)
 {
     /* the present of this frame is inside the drawing call still running: it counts in the next one, at most one frame off */
@@ -347,11 +401,15 @@ static int tex_slot(N64Tex *t, float scale, int additive)
     int pw = (tw + 3) & ~3;
     while (pw * th > MAX_TEXELS && th > 1) --th;
 
-    /* picks a slot the RDP will no longer read: never used or unused in the last CACHE_GUARD frames */
+    /* picks a slot the RDP will no longer read: never used or, among those unused in the last CACHE_GUARD frames, the one unused for longest.
+     * A conversion costs far more than this search, and the frames of an animation come back after a few frames. */
     int slot = -1;
+    uint32_t oldest = 0;
     for (int i = 0; i < CACHE_N; ++i) {
         const int s = (g_next + i) % CACHE_N;
-        if (g_c[s].used == 0 || (g_frames + 1) - g_c[s].used >= CACHE_GUARD) { slot = s; break; }
+        if (g_c[s].used == 0) { slot = s; break; }
+        const uint32_t age = (g_frames + 1) - g_c[s].used;
+        if (age >= CACHE_GUARD && age > oldest) { oldest = age; slot = s; }
     }
     if (slot < 0) { /* all recently in use: uses one not captured in THIS frame, after waiting for the RDP */
         for (int i = 0; i < CACHE_N; ++i) {
@@ -1005,6 +1063,8 @@ void gta2_n64_present(const void *cmds_, int cmdCount, const void *verts_, int v
                          prof_ms(g_prof_avg[PROF_SPRITES], 0), prof_ms(g_prof_avg[PROF_HUD], 0), prof_ms(g_prof_avg[PROF_CAPTURE], 0), prof_ms(g_prof_avg[PROF_LIGHTS], 0),
                          gta2_n64_get_mode() ? "QUALITY" : "PERFORM", gta2_n64_get_lights() ? "DUSK" : "NOON",
                          "LMH"[gta2_n64_get_population()], "LMH"[gta2_n64_get_traffic()]);
+        pc_report();
+        rdpq_text_print(NULL, gta2_n64_debug_font(), 200, 48, g_pc_text);
         gta2_prof_add(PROF_OVERLAY, prof_overlay_t0);
     }
 #endif

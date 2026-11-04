@@ -52,9 +52,9 @@ CXX_ENGINE = $(CXX_STD) -fshort-wchar -fms-extensions -fpermissive -w -DGTA2_POR
              -Isrc/compat -Isrc/compat_ci -Isrc/n64 -Isrc/gta2_re/Source -Isrc/gta2_re -MMD -MP $(EXTRA_CFLAGS)
 
 # Engine: optimize for size (N64 RAM is the bottleneck; the code takes ~1.9 MB of the 8 MB).
-# Heaviest files per frame (map, sprites, collision, car physics, math, and the logic of pedestrians, cars and objects): -O2 (faster, larger code).
+# Heaviest files per frame (map, sprites, collision, car physics, math, and the logic of pedestrians, cars, objects and sound): -O2 (faster, larger code).
 HOT_ENGINE := MapRenderer sprite SpriteRenderer_1C SpriteGrid_400 Draw map_0x370 collide CarPhysics_B0 Fix16_Point fix16 ang16 angle \
-              Ped Char_Pool PedGroup Car_BC CarAI_78 Object_5C
+              Ped Char_Pool PedGroup Car_BC CarAI_78 Object_5C sound_obj cSampleManager
 HOT_OBJS := $(addprefix $(OBJ_DIR)/src/gta2_re/Source/,$(addsuffix .o,$(HOT_ENGINE)))
 $(filter-out $(HOT_OBJS),$(ENGINE_OBJS)): N64_CXXFLAGS += -Os
 $(HOT_OBJS): N64_CXXFLAGS += -O2

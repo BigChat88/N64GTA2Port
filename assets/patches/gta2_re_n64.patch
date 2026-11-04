@@ -1773,7 +1773,7 @@ index 355af99..cf1cefb 100644
  MATCH_FUNC(0x4B9DE0)
  Game_0x40::Game_0x40(u8 max_players, s8 player_idx) // 4B9DE0
 diff --git a/Source/Hud.cpp b/Source/Hud.cpp
-index dbe84d1..5226157 100644
+index dbe84d1..c997011 100644
 --- a/Source/Hud.cpp
 +++ b/Source/Hud.cpp
 @@ -1,3 +1,4 @@
@@ -1982,15 +1982,7 @@ index dbe84d1..5226157 100644
          }
  
          field_6F8_curr_briefs->field_10_was_displayed = 1;
-@@ -2516,6 +2603,7 @@ void Hud_PickupText_88::Draw_5D5420()
- {
-     if (field_0_timer)
-     {
-+        N64_TextBox(field_2_str, (640 - field_84_text_width) / 2, 32, word_7064B8);
-         DrawText_5D7720(field_2_str, (640 - field_84_text_width) / 2, 32, word_7064B8, 8, 5, 0, 0);
-     }
- }
-@@ -2560,6 +2648,7 @@ void Hud_MpMessage_D0::Draw_5D56D0()
+@@ -2560,6 +2647,7 @@ void Hud_MpMessage_D0::Draw_5D56D0()
  {
      if (this->field_0_timer)
      {
@@ -1998,7 +1990,7 @@ index dbe84d1..5226157 100644
          DrawText_5D7720(this->field_2_str, (u32)((640 - this->field_CC_text_width) / 2), (u32)16, word_7064D8, 8, 5, 0, 0);
      }
  }
-@@ -2938,6 +3027,42 @@ void Hud_PlayerStats_4::UpdateRollingDigits_5D6290()
+@@ -2938,6 +3026,42 @@ void Hud_PlayerStats_4::UpdateRollingDigits_5D6290()
  
  // ----------------------------------------------------
  
@@ -2041,7 +2033,7 @@ index dbe84d1..5226157 100644
  // Not in IDA's function list: only reached through the UpdatePauseSection_5D69C0 thunk below.
  MATCH_FUNC(0x5D6300)
  void Hud_PauseScreen_2::UpdatePauseSection_5D6300()
-@@ -2997,6 +3122,15 @@ void Hud_PauseScreen_2::DrawPause_5D63B0()
+@@ -2997,6 +3121,15 @@ void Hud_PauseScreen_2::DrawPause_5D63B0()
      u16 sprite_pal = 0;
      if (gGame_0x40_67E008->Is_game_state_Paused_2_416BC0() && !gGame_0x40_67E008->field_38_orf1->field_78A_show_quit_message)
      {
@@ -2057,7 +2049,7 @@ index dbe84d1..5226157 100644
          DrawFigureScaled_5D7670(6, 134, 227, 180, kAngZero_706610, 2, 0, 0, 0);
          DrawFigureScaled_5D7670(6, 136, 320, 180, kAngZero_706610, 2, 0, 0, 0);
          DrawFigureScaled_5D7670(6, 135, 413, 180, kAngZero_706610, 2, 0, 0, 0);
-@@ -3140,26 +3274,51 @@ void Hud_PauseScreen_2::DrawPause_5D63B0()
+@@ -3140,26 +3273,51 @@ void Hud_PauseScreen_2::DrawPause_5D63B0()
              // (u32): Fix16(u32) constructor (0x4926F0), the 220 goes through Fix16(s32) (0x4369F0)
              DrawText_5D7720(tmpBuff_67BD9C, (u32)text_xpos, 220, word_7064D8, 8, 6, 0, 0);
          }
@@ -3774,11 +3766,36 @@ index 8d3eba3..ce72ab4 100644
      EXPORT static void __stdcall CreateFile_4A7000(const char_type* FileName);
  
 diff --git a/Source/fix16.cpp b/Source/fix16.cpp
-index c2dfe78..9656fe3 100644
+index c2dfe78..911d38a 100644
 --- a/Source/fix16.cpp
 +++ b/Source/fix16.cpp
-@@ -91,7 +91,7 @@ Fix16 Fix16::Negate_4086A0() const throw()
+@@ -15,6 +15,7 @@ DEFINE_GLOBAL_INIT(Ang16, kAng180_669156, Ang16(720), 0x669156);
+ DEFINE_GLOBAL_INIT(Ang16, kAng90_667A7C, Ang16(360), 0x667A7C);
+ DEFINE_GLOBAL_INIT(Ang16, kAng270_66916C, Ang16(1080), 0x66916C);
+ 
++#ifndef N64 // inline in fix16.hpp
+ MATCH_FUNC(0x408660)
+ Fix16 Fix16::Add_408660(const Fix16& rhs) const throw()
+ {
+@@ -35,6 +36,7 @@ Fix16 Fix16::Subtract_436A00(const Fix16& in) const
+     s32 value = mValue - in.mValue;
+     return Fix16(value, 0);
  }
++#endif
+ 
+ MATCH_FUNC(0x436A20)
+ Fix16 Fix16::Divide_436A20(const Fix16& in) const
+@@ -84,14 +86,16 @@ Fix16& Fix16::MultiplyAssign_562430(const Fix16& rhs)
+     return *this;
+ }
+ 
++#ifndef N64 // inline in fix16.hpp
+ MATCH_FUNC(0x4086A0)
+ Fix16 Fix16::Negate_4086A0() const throw()
+ {
+     return Fix16(-mValue, 0);
+ }
++#endif
  
  MATCH_FUNC(0x44E540)
 -Fix16 __stdcall Fix16::Max_44E540(Fix16& pLhs, Fix16& pRhs)
@@ -3786,7 +3803,7 @@ index c2dfe78..9656fe3 100644
  {
      Fix16 result;
      if (pLhs.mValue > pRhs.mValue)
-@@ -115,7 +115,7 @@ Fix16 Fix16::operator/(const Fix16& in)
+@@ -115,7 +119,7 @@ Fix16 Fix16::operator/(const Fix16& in)
  */
  
  MATCH_FUNC(0x436A50)
@@ -3795,7 +3812,7 @@ index c2dfe78..9656fe3 100644
  {
      if (input.mValue > 0)
      {
-@@ -128,7 +128,7 @@ Fix16 __stdcall Fix16::Abs_436A50(Fix16& input)
+@@ -128,7 +132,7 @@ Fix16 __stdcall Fix16::Abs_436A50(Fix16& input)
  }
  
  MATCH_FUNC(0x436A70)
@@ -3804,7 +3821,7 @@ index c2dfe78..9656fe3 100644
  {
      return Fix16(sqrt(input.AsDouble()));
  }
-@@ -136,7 +136,7 @@ Fix16 __stdcall Fix16::SquareRoot_436A70(Fix16& input)
+@@ -136,7 +140,7 @@ Fix16 __stdcall Fix16::SquareRoot_436A70(Fix16& input)
  // 10.5 https://decomp.me/scratch/7a41K
  // 9.6f https://decomp.me/scratch/ZkUbq
  MATCH_FUNC(0x405320)
@@ -3814,7 +3831,7 @@ index c2dfe78..9656fe3 100644
      Ang16 v9;
      if (y == kFPZero_6691B0)
 diff --git a/Source/fix16.hpp b/Source/fix16.hpp
-index 7caca6f..bb325a7 100644
+index 7caca6f..1188171 100644
 --- a/Source/fix16.hpp
 +++ b/Source/fix16.hpp
 @@ -20,7 +20,7 @@ class Fix16
@@ -3883,7 +3900,7 @@ index 7caca6f..bb325a7 100644
      {
          if (a > b)
          {
-@@ -352,8 +359,8 @@ class Fix16
+@@ -352,16 +359,35 @@ class Fix16
              return b;
          }
      }
@@ -3894,8 +3911,45 @@ index 7caca6f..bb325a7 100644
      // throw(): the original calls these out-of-line copies without an EH frame (their inline
      // bodies were visible there), see CarPhysics_B0::UpdateReferencePoint_563460
      // Out-of-line copy of operator+ (0x408660)
-@@ -372,7 +379,7 @@ class Fix16
++#ifdef N64
++    // Called from hundreds of places, including camera projection: here a call costs more than the operation.
++    __forceinline Fix16 Add_408660(const Fix16& rhs) const throw()
++    {
++        return Fix16(mValue + rhs.mValue, 0);
++    }
++    __forceinline Fix16 Multiply_408680(const Fix16& in) const throw()
++    {
++        return Fix16((s32)((mValue * (__int64)in.mValue) >> 14), 0);
++    }
++#else
+     EXPORT Fix16 Add_408660(const Fix16& rhs) const throw();
+     EXPORT Fix16 Multiply_408680(const Fix16& in) const throw();
++#endif
+     // Out-of-line copies of operators, which big functions call once they run out of inline
+     // expansions (Sprite_4C::DrawCollisionBox_5A4DA0)
++#ifdef N64
++    __forceinline Fix16 Subtract_436A00(const Fix16& in) const
++    {
++        return Fix16(mValue - in.mValue, 0);
++    }
++#else
+     EXPORT Fix16 Subtract_436A00(const Fix16& in) const;
++#endif
+     EXPORT Fix16 Divide_436A20(const Fix16& in) const;
+     EXPORT s32 IsLess_451670(const Fix16& other) const;
+     EXPORT s32 IsGreater_451690(const Fix16& other) const;
+@@ -369,10 +395,17 @@ class Fix16
+     EXPORT Fix16 MultiplyInt_561DB0(const s32& in) const;
+     EXPORT Fix16 DivideInt_53E860(const s32& in) const;
+     EXPORT Fix16& MultiplyAssign_562430(const Fix16& rhs);
++#ifdef N64
++    __forceinline Fix16 Negate_4086A0() const throw()
++    {
++        return Fix16(-mValue, 0);
++    }
++#else
      EXPORT Fix16 Negate_4086A0() const throw();
++#endif
  
      // Needed this for a GetLength variant used by miss2_0x11C::GetSpeed_50E190.
 -    inline static Fix16 __stdcall Abs_negate_out_of_line(Fix16& input)
@@ -3903,7 +3957,7 @@ index 7caca6f..bb325a7 100644
      {
          if (input.mValue > 0)
          {
-@@ -383,7 +390,7 @@ class Fix16
+@@ -383,7 +416,7 @@ class Fix16
      }
  
      //MATCH_FUNC(0x436A20)
@@ -3912,7 +3966,7 @@ index 7caca6f..bb325a7 100644
      {
          s32 value = (s32)(((__int64)mValue << 14) / in.mValue);
          return Fix16(value, 0);
-@@ -392,7 +399,7 @@ class Fix16
+@@ -392,7 +425,7 @@ class Fix16
      // Inlined from 9.6f at 0x401bf0
      // I am not fully sure if this is right, i.e. the s32 parameter, instead of Fix16.
      // But I couldn't match ObjectDefinition_74::SetDimensionsFromSprite_533090 without this overload.
@@ -3921,7 +3975,7 @@ index 7caca6f..bb325a7 100644
      {
          s32 value = mValue / in;
          return Fix16(value, 0);
-@@ -421,7 +428,7 @@ class Fix16
+@@ -421,7 +454,7 @@ class Fix16
      }
  
      // https://decomp.me/scratch/MqQPJ
@@ -3930,7 +3984,7 @@ index 7caca6f..bb325a7 100644
      {
          Fix16 diff_x;
          diff_x = x2 - x1;
-@@ -437,7 +444,7 @@ class Fix16
+@@ -437,7 +470,7 @@ class Fix16
      EXPORT static Fix16 __stdcall ClampToRangeFlexible_ool_55EEE0(Fix16& a2, Fix16& a3, Fix16& a4);
  
      // NOTE: 10.5 function - matched but inlined
@@ -3939,7 +3993,7 @@ index 7caca6f..bb325a7 100644
      {
          if (a2 > a3)
          {
-@@ -489,7 +496,7 @@ class Fix16
+@@ -489,7 +522,7 @@ class Fix16
          return Fix16(mValue + 0x4000, 0);
      }
  

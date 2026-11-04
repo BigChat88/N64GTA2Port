@@ -36,6 +36,9 @@ INTRO_MAX_KBPS = 1200
 # so anything above 1/1.25 = 0.8 can clip on playback. Below that because alimiter lets peaks land ~3% over its limit and
 # ULC does not reproduce them exactly.
 STREAM_LIMIT = 0.72
+# 12.wav is the city ambience heard on foot. Its right channel repeats part of the left one 95 ms later, so a mono downmix is a comb
+# filter that sounds metallic. One channel is used instead, scaled to the loudness of the downmix (rms 1955 from 3151).
+SINGLE_CHANNEL = {"12.wav": "pan=mono|c0=0.62*c1"}
 # Lets a folder or zip be recognized as the game's data folder.
 MARKER = "e.gxt"
 
@@ -89,6 +92,9 @@ def master_wav(ffmpeg, src, dst, rate):
     """Writes src as a mono wav under STREAM_LIMIT. Everything happens in float: the intro's source goes over full scale."""
     # rematrix_maxval: the stereo downmix must not add gain (float samples are not normalized by default)
     af = "aresample=out_sample_rate=%d:out_chlayout=mono:out_sample_fmt=flt:rematrix_maxval=1,alimiter=limit=%s:level=disabled" % (rate, STREAM_LIMIT)
+    channel = SINGLE_CHANNEL.get(os.path.basename(src).lower())
+    if channel:
+        af = channel + "," + af
     # bitexact, no metadata: audioconv64's wav reader only expects the fmt and data chunks
     subprocess.run([ffmpeg, "-nostdin", "-hide_banner", "-loglevel", "error", "-y", "-i", src, "-vn", "-af", af, "-c:a", "pcm_s16le",
                     "-map_metadata", "-1", "-fflags", "+bitexact", "-flags:a", "+bitexact", dst], check=True)
@@ -162,7 +168,7 @@ def stage(src, out, audioconv, maps=MAPS.split(), bonus=BONUS.split(), radios=RA
         print("WARNING: ffmpeg not found: the radios keep their full-scale peaks, which can clip in the mixer", flush=True)
 
     # radios: rate, quality and ceiling. If it changes (different stamp file), ALL radios are reconverted.
-    radio_cfg = "ulc%s-mono-%s-%s" % (radio_quality, radio_rate, STREAM_LIMIT if ffmpeg else "nolimit")
+    radio_cfg = "ulc%s-mono-%s-%s-%s" % (radio_quality, radio_rate, STREAM_LIMIT if ffmpeg else "nolimit", SINGLE_CHANNEL if ffmpeg else "downmix")
     stamp = out_base + ".radio_cfg"
     radio_force = True
     if os.path.isfile(stamp):
