@@ -130,6 +130,7 @@ uint32_t gHudCmdFlag = 0; // kind 0 commands: colour = 1 while the HUD is being 
 uint64_t gTxtKey = 0;
 size_t gTxtCmd0 = 0, gTxtVert0 = 0;
 uint32_t gTxtStamp = 0;
+uint32_t gTxtLastReset = 0;
 
 
 inline uint64_t txtMix(uint64_t h, uint32_t v)
@@ -304,6 +305,26 @@ void gta2_text_end()
         return;
     }
 
+    // Keeps what is on screen when the cache is full. Clearing it for a page with more phrases than it holds, like the results of a level, threw
+    // away and recorded again every phrase of every frame. Only entries left over from earlier screens are worth clearing, and not often.
+    {
+        bool hasSlot = false, hasStale = false;
+        for (int i = 0; i < kTxtEntries; ++i)
+        {
+            hasSlot = hasSlot || !gTxtEnt[i].used || gTxtEnt[i].key == gTxtKey;
+            hasStale = hasStale || (gTxtEnt[i].used && gTxtEnt[i].last + 1u < gPresents);
+        }
+        if (!hasSlot || gTxtPoolUsed + static_cast<uint32_t>(nv) > kTxtMaxVerts)
+        {
+            if (!hasStale || gPresents - gTxtLastReset < 30u)
+            {
+                return; // this phrase is drawn letter by letter, as it came
+            }
+            gTxtLastReset = gPresents;
+            txtReset();
+        }
+    }
+
     // distinct textures, in order of appearance, and the vertex total of each
     uint32_t tex[kTxtMaxCmds];
     uint32_t cnt[kTxtMaxCmds];
@@ -473,6 +494,15 @@ void gta2_frame_set_hud(int on)
     gHudCmdFlag = on ? 1u : 0u;
     gta2_n64_tex_set_hud(on);
     gForceNewCmd = true;
+}
+
+// The renderer turns on the menu's text mode when it presents a frame, too late for the first one: its letters were converted at the reduced size
+// of the game, and the phrases kept that way went on being replayed with them until the cache was next cleared. So the first page of a menu
+// started blurred and sharpened a second or two later.
+void gta2_frame_enter_menu()
+{
+    gta2_frame_set_hud(1);
+    txtReset();
 }
 
 // 1 = the kept commands were replayed (the caller must not draw the piece)

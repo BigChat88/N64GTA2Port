@@ -293,7 +293,7 @@ index 1502a0c..40f9e00 100644
  
      field_804_raw_data = new ModelPhysics_48[number_of_cars];
 diff --git a/Source/CarPhysics_B0.cpp b/Source/CarPhysics_B0.cpp
-index 618e08b..67a972e 100644
+index 618e08b..d307102 100644
 --- a/Source/CarPhysics_B0.cpp
 +++ b/Source/CarPhysics_B0.cpp
 @@ -21,7 +21,7 @@
@@ -316,7 +316,31 @@ index 618e08b..67a972e 100644
      s32 v28 = gMap_0x370_6F6268->GetBlockSurfaceType_49EBE0(field_38_cp1.x.ToInt(), this->field_38_cp1.y.ToInt(), cp3_int, &graident_size, &gradient_level);
  
      //LABEL_37:
-@@ -2228,10 +2228,10 @@ char_type CarPhysics_B0::CheckPendingCollision_55F360()
+@@ -1723,6 +1723,10 @@ void CarPhysics_B0::ReplayAndDispatchCollision_55CBB0(Fix16 a2, Fix16 a3)
+     }
+ }
+ 
++#if defined(N64) && !defined(N64_SKID_MAX)
++#define N64_SKID_MAX 120 // tyre marks alive at the same time; the objects counted with them can still go up to the engine's 360
++#endif
++
+ // 9.6f 0x4A0120
+ MATCH_FUNC(0x55d200)
+ void CarPhysics_B0::SpawnSkidSegment_55D200(s32 box_idx, Fix16_Point arg_4, s32 surface)
+@@ -1753,7 +1757,12 @@ void CarPhysics_B0::SpawnSkidSegment_55D200(s32 box_idx, Fix16_Point arg_4, s32
+ 
+             Ang16 r = t.atan2_40F790();
+             len = t.GetLength_all_out_of_line_abs();
++#ifdef N64
++            // At the limit the mark is skipped and the next one starts from here: a gap, not one long mark.
++            if (len > kFP16Zero_6FE20C && gObject_5C_6F8F84->field_10_rotation_counter < N64_SKID_MAX)
++#else
+             if (len > kFP16Zero_6FE20C)
++#endif
+             {
+                 Object_2C* pObj =
+                     gObject_5C_6F8F84->NewPhysicsObj_5299B0(get_skid_obj_type_55D490(surface, len), obj_x, obj_y, field_6C_cp3, r);
+@@ -2228,10 +2237,10 @@ char_type CarPhysics_B0::CheckPendingCollision_55F360()
  MATCH_FUNC(0x55F3B0)
  EXPORT Fix16_Point __stdcall ComputeLineLineIntersection_55F3B0(Fix16 OwnerMass,
                                                                  Fix16 TargetMass,
@@ -329,7 +353,7 @@ index 618e08b..67a972e 100644
                                                                  Fix16_Point& a8,
                                                                  Fix16 OwnerMomOfInertia,
                                                                  Fix16 TargetMomOfInertia,
-@@ -2310,7 +2310,7 @@ void CarPhysics_B0::ApplyForceAndIntegrate_55F7A0(Fix16_Point* a2, Fix16_Point a
+@@ -2310,7 +2319,7 @@ void CarPhysics_B0::ApplyForceAndIntegrate_55F7A0(Fix16_Point* a2, Fix16_Point a
  // GetLength_41E260 as inlined into ApplyImpactForcesAndDamage_55FA60: both Abs are called out of line
  // (Abs_436A50) although the first multiply is inlined, which the plain inline can't give (Abs and operator*
  // have the same front-end size, 57).
@@ -338,7 +362,7 @@ index 618e08b..67a972e 100644
  {
      if (p.x == FIX16_POINT_ZERO)
      {
-@@ -2372,7 +2372,7 @@ void CarPhysics_B0::ApplyAngularImpulse_55F970(Fix16 a2)
+@@ -2372,7 +2381,7 @@ void CarPhysics_B0::ApplyAngularImpulse_55F970(Fix16 a2)
  }
  
  MATCH_FUNC(0x55f9a0)
@@ -347,7 +371,7 @@ index 618e08b..67a972e 100644
  {
      field_48_force_accum += pForce.Multiply_438FE0(CarPhysics_B0::CalculateMass_559FF0());
  }
-@@ -2396,7 +2396,7 @@ void CarPhysics_B0::ApplyImpulseWithTrailerRedirect_55FA10(Fix16_Point* a2)
+@@ -2396,7 +2405,7 @@ void CarPhysics_B0::ApplyImpulseWithTrailerRedirect_55FA10(Fix16_Point* a2)
  
  // https://decomp.me/scratch/TSKLx
  MATCH_FUNC(0x55fa60)
@@ -356,7 +380,7 @@ index 618e08b..67a972e 100644
  {
      Fix16_Point NewImpulse;
      Fix16 ImpulseIntensity = GetLength_AbsOutOfLine_41E260(Impulse);
-@@ -2439,7 +2439,7 @@ static inline Fix16 __stdcall DotProductInlined_49E500(Fix16_Point& Vector1, Fix
+@@ -2439,7 +2448,7 @@ static inline Fix16 __stdcall DotProductInlined_49E500(Fix16_Point& Vector1, Fix
  }
  
  // DotProductInlined_49E500 with the out-of-line Fix16 operator copies
@@ -365,7 +389,7 @@ index 618e08b..67a972e 100644
  {
      return Vector1.x.Multiply_408680(Vector2.x).Add_408660(Vector1.y.Multiply_408680(Vector2.y));
  }
-@@ -2451,7 +2451,7 @@ static inline Fix16 __stdcall Square_49E0E0(const Fix16& value)
+@@ -2451,7 +2460,7 @@ static inline Fix16 __stdcall Square_49E0E0(const Fix16& value)
  }
  
  MATCH_FUNC(0x55fc30)
@@ -374,7 +398,7 @@ index 618e08b..67a972e 100644
  {
  
      Fix16_Point a2;
-@@ -3235,7 +3235,7 @@ Fix16 CarPhysics_B0::CalculateRearWheelForce_5620D0()
+@@ -3235,7 +3244,7 @@ Fix16 CarPhysics_B0::CalculateRearWheelForce_5620D0()
      }
  
      Fix16 new_x;
@@ -383,7 +407,7 @@ index 618e08b..67a972e 100644
      Fix16 brake_force2;
      Fix16 brake_force3;
      Fix16 pointing_ang_rad;
-@@ -3682,7 +3682,7 @@ MATCH_FUNC(0x562fe0)
+@@ -3682,7 +3691,7 @@ MATCH_FUNC(0x562fe0)
  bool CarPhysics_B0::ProcessCarPhysicsStateMachine_562FE0()
  {
      char carModel; // al
@@ -1041,10 +1065,10 @@ index c010fb9..2543888 100644
      x += other.x;
      y += other.y;
 diff --git a/Source/Frontend.cpp b/Source/Frontend.cpp
-index d795ddf..49760ef 100644
+index d795ddf..44a3409 100644
 --- a/Source/Frontend.cpp
 +++ b/Source/Frontend.cpp
-@@ -37,6 +37,133 @@
+@@ -37,6 +37,134 @@
  #pragma comment(lib, "dxguid.lib")
  
  void Start_GTA2Manager_5E4DE0();
@@ -1066,8 +1090,9 @@ index d795ddf..49760ef 100644
 +extern "C" int gta2_n64_get_traffic(void);
 +extern "C" void gta2_n64_set_traffic(int level);
 +extern char gN64Language; // text_0x14.cpp
++extern "C" void gta2_frame_enter_menu(); // frame_n64.cpp
 +
-+// Options page rows: 0 music, 1 effects, 2 language, 3 time of day, 4 mode (performance/quality), 5 limit of 30 FPS; 6 = BACK
++// Options page rows: 0 music, 1 effects, 2 language, 3 time of day, 4 mode (performance/quality), 5 limit of 30 FPS, 6 pedestrians, 7 traffic, 8 rumble; 9 = BACK
 +enum
 +{
 +    N64_OPT_ROWS = 9,
@@ -1100,9 +1125,9 @@ index d795ddf..49760ef 100644
 +    o[3].field_6E_horizontal_selected_idx = (u16)gta2_n64_get_lights();
 +    o[4].field_6E_horizontal_selected_idx = (u16)gta2_n64_get_mode();
 +    o[5].field_6E_horizontal_selected_idx = (u16)gta2_n64_get_fps_limit();
-+    o[6].field_6E_horizontal_selected_idx = (u16)gta2_n64_get_rumble();
-+    o[7].field_6E_horizontal_selected_idx = (u16)gta2_n64_get_population();
-+    o[8].field_6E_horizontal_selected_idx = (u16)gta2_n64_get_traffic();
++    o[6].field_6E_horizontal_selected_idx = (u16)gta2_n64_get_population();
++    o[7].field_6E_horizontal_selected_idx = (u16)gta2_n64_get_traffic();
++    o[8].field_6E_horizontal_selected_idx = (u16)gta2_n64_get_rumble();
 +}
 +
 +// Applies the chosen value on row `row` of the Options page (saved on leaving the page)
@@ -1163,22 +1188,32 @@ index d795ddf..49760ef 100644
 +    }
 +    else if (row == 6)
 +    {
-+        gta2_n64_set_rumble(val);
++        gta2_n64_set_population(val);
 +    }
 +    else if (row == 7)
 +    {
-+        gta2_n64_set_population(val);
++        gta2_n64_set_traffic(val);
 +    }
 +    else if (row == 8)
 +    {
-+        gta2_n64_set_traffic(val);
++        gta2_n64_set_rumble(val);
 +    }
 +}
 +#endif
  
  DEFINE_GLOBAL(Frontend*, gFrontend_67DC84, 0x67DC84);
  DEFINE_GLOBAL_INIT(u32, counter_706C4C, 0, 0x706C4C);
-@@ -431,6 +558,12 @@ void Frontend::ChangeMenuPage_4B3170(u16 menu_page_idx)
+@@ -358,6 +486,9 @@ void __stdcall Frontend::create_4ACFA0()
+     {
+         gFrontend_67DC84 = new Frontend();
+     }
++#ifdef N64
++    gta2_frame_enter_menu();
++#endif
+ 
+     if (!bSkip_audio_67D6BE)
+     {
+@@ -431,6 +562,12 @@ void Frontend::ChangeMenuPage_4B3170(u16 menu_page_idx)
      wchar_t quit_name[64];
  
      PlySlot_A4* pStats = GetCurrPlayerStats_4B43E0();
@@ -1191,7 +1226,7 @@ index d795ddf..49760ef 100644
      field_132_f136_idx = menu_page_idx;
  
      if (menu_page_idx == MENUPAGE_PARENTAL_CONTROL)
-@@ -726,6 +859,12 @@ void Frontend::ChangeMenuPage_4B3170(u16 menu_page_idx)
+@@ -726,6 +863,12 @@ void Frontend::ChangeMenuPage_4B3170(u16 menu_page_idx)
              Bink::OpenSlot2_5133E0(gFrontend_67DC84->intro_bik_4B5E50(), gSampManager_6FFF00.field_0_hDriver);
          }
      }
@@ -1204,7 +1239,7 @@ index d795ddf..49760ef 100644
      else if (menu_page_idx == MENUPAGE_START_MENU)
      {
          field_C9E4_last_input_time = timeGetTime();
-@@ -758,6 +897,13 @@ void Frontend::GetOptionText_4B3AF0(u16 menu_page_idx, u16 option_idx, wchar_t**
+@@ -758,6 +901,13 @@ void Frontend::GetOptionText_4B3AF0(u16 menu_page_idx, u16 option_idx, wchar_t**
      {
          u16 plyr_idx = pOption->field_6E_horizontal_selected_idx;
          wchar_t* p_wName = (wchar_t*)&gPlyDat_6FEAC0->field_26A0_plyr_stats[plyr_idx].field_90_strPlayerName;
@@ -1218,7 +1253,7 @@ index d795ddf..49760ef 100644
          if (field_110_state == FrontendState::User_Typing_New_Player_Name_3)
          {
              // player typing a name
-@@ -775,6 +921,35 @@ void Frontend::GetOptionText_4B3AF0(u16 menu_page_idx, u16 option_idx, wchar_t**
+@@ -775,6 +925,35 @@ void Frontend::GetOptionText_4B3AF0(u16 menu_page_idx, u16 option_idx, wchar_t**
              swprintf(gTmpWideStr_67C7D8, L"%s", gPlyDat_6FEAC0->field_26A0_plyr_stats[plyr_idx].field_90_strPlayerName);
          }
      }
@@ -1239,13 +1274,13 @@ index d795ddf..49760ef 100644
 +        swprintf(gTmpWideStr_67C7D8, L"%s %s", pOption->field_6_option_name_str,
 +                 gText_0x14_704DFC->Find_5B5F90(pOption->field_6E_horizontal_selected_idx ? "n64qual" : "n64perf"));
 +    }
-+    else if (menu_page_idx == MENUPAGE_15 && (option_idx == 7 || option_idx == 8))
++    else if (menu_page_idx == MENUPAGE_15 && (option_idx == 6 || option_idx == 7))
 +    {
 +        const u16 population = pOption->field_6E_horizontal_selected_idx;
 +        swprintf(gTmpWideStr_67C7D8, L"%s %s", pOption->field_6_option_name_str,
 +                 gText_0x14_704DFC->Find_5B5F90(population == 2 ? "n64high" : (population == 1 ? "n64med" : "n64low")));
 +    }
-+    else if (menu_page_idx == MENUPAGE_15 && (option_idx == 5 || option_idx == 6))
++    else if (menu_page_idx == MENUPAGE_15 && (option_idx == 5 || option_idx == 8))
 +    {
 +        swprintf(gTmpWideStr_67C7D8, L"%s %s", pOption->field_6_option_name_str,
 +                 gText_0x14_704DFC->Find_5B5F90(pOption->field_6E_horizontal_selected_idx ? "n64on" : "n64off"));
@@ -1254,7 +1289,7 @@ index d795ddf..49760ef 100644
      else if (menu_page_idx == MENUPAGE_VIEW_HIGH_SCORE && option_idx == 0)
      {
          swprintf(gTmpWideStr_67C7D8, L"%s", gText_0x14_704DFC->Find_5B5F90("hi_for"));
-@@ -984,11 +1159,13 @@ void Frontend::DrawMenu_4AD140()
+@@ -984,11 +1163,13 @@ void Frontend::DrawMenu_4AD140()
      u16 selected_option_idx;
      u16 last_xpos;
  
@@ -1268,7 +1303,7 @@ index d795ddf..49760ef 100644
  
      if (field_132_f136_idx == MENUPAGE_PLAY)
      {
-@@ -1009,8 +1186,14 @@ void Frontend::DrawMenu_4AD140()
+@@ -1009,8 +1190,14 @@ void Frontend::DrawMenu_4AD140()
          {
              u16 idx = pMenuPage->field_4_options_array[0].field_6E_horizontal_selected_idx;
              selected_option_idx = idx;
@@ -1283,7 +1318,7 @@ index d795ddf..49760ef 100644
  
              if (unk_xpos == 10)
              {
-@@ -1140,6 +1323,14 @@ void Frontend::DrawMenu_4AD140()
+@@ -1140,6 +1327,14 @@ void Frontend::DrawMenu_4AD140()
  
              x_pos = pMenuOption->field_2_x_pos;
              y_pos = pMenuOption->field_4_y_pos;
@@ -1298,7 +1333,7 @@ index d795ddf..49760ef 100644
  
              if (option_idx == pMenuPage->field_BC6_current_option_idx)
              {
-@@ -1241,9 +1432,13 @@ void Frontend::DrawMenu_4AD140()
+@@ -1241,9 +1436,13 @@ void Frontend::DrawMenu_4AD140()
          else
          {
              bool v45 = false;
@@ -1312,7 +1347,7 @@ index d795ddf..49760ef 100644
              {
                  v45 = true;
              }
-@@ -1306,7 +1501,7 @@ void Frontend::DrawMenu_4AD140()
+@@ -1306,7 +1505,7 @@ void Frontend::DrawMenu_4AD140()
          if (pMenuElement->field_1_is_it_displayed)
          {
              u16 font_type;
@@ -1321,7 +1356,7 @@ index d795ddf..49760ef 100644
  
              switch (pMenuElement->field_0_element_type)
              {
-@@ -1750,6 +1945,12 @@ void Frontend::UpdateMenuScreen_4B6780()
+@@ -1750,6 +1949,12 @@ void Frontend::UpdateMenuScreen_4B6780()
          {
              field_EE08_menu_screen = Credits_17;
          }
@@ -1334,7 +1369,7 @@ index d795ddf..49760ef 100644
          else
          {
              field_EE08_menu_screen = PlayArea1_7;
-@@ -1779,7 +1980,11 @@ void Frontend::ManageCredits_4B7A10()
+@@ -1779,7 +1984,11 @@ void Frontend::ManageCredits_4B7A10()
      {
          if (!field_C9B3_key_held)
          {
@@ -1346,7 +1381,7 @@ index d795ddf..49760ef 100644
              return;
          }
      }
-@@ -1798,7 +2003,11 @@ void Frontend::ManageCredits_4B7A10()
+@@ -1798,7 +2007,11 @@ void Frontend::ManageCredits_4B7A10()
              {
                  if (++field_1EB38_credits_line_idx == 600)
                  {
@@ -1358,7 +1393,7 @@ index d795ddf..49760ef 100644
                      return;
                  }
                  if ((field_1EB34_credits_ypos += Fix16(field_EE0E_credits.field_2_lines[field_1EB38_credits_line_idx].field_4_y_gap)) > 262124)
-@@ -1894,7 +2103,11 @@ void Frontend::UpdatePageFromUserInput_4AE2D0()
+@@ -1894,7 +2107,11 @@ void Frontend::UpdatePageFromUserInput_4AE2D0()
                      }
                      else
                      {
@@ -1370,7 +1405,7 @@ index d795ddf..49760ef 100644
                      }
                      field_EE08_menu_screen = RedBar_16;
                      field_110_state = FrontendState::Booting_Map_2;
-@@ -1935,6 +2148,12 @@ void Frontend::UpdatePageFromUserInput_4AE2D0()
+@@ -1935,6 +2152,12 @@ void Frontend::UpdatePageFromUserInput_4AE2D0()
              }
              snd1_67D818.field_0_object_type = 5;
          }
@@ -1383,7 +1418,7 @@ index d795ddf..49760ef 100644
          else if (field_132_f136_idx == MENUPAGE_PLAY && pBorg->field_BC6_current_option_idx == 0) // player
          {
              field_110_state = FrontendState::User_Typing_New_Player_Name_3;
-@@ -1952,10 +2171,18 @@ void Frontend::UpdatePageFromUserInput_4AE2D0()
+@@ -1952,10 +2175,18 @@ void Frontend::UpdatePageFromUserInput_4AE2D0()
      {
          switch (field_132_f136_idx)
          {
@@ -1402,7 +1437,7 @@ index d795ddf..49760ef 100644
              case MENUPAGE_PLAY:
              case MENUPAGE_DEAD:
              case MENUPAGE_AREA_COMPLETE:
-@@ -1969,7 +2196,11 @@ void Frontend::UpdatePageFromUserInput_4AE2D0()
+@@ -1969,7 +2200,11 @@ void Frontend::UpdatePageFromUserInput_4AE2D0()
                  ChangeMenuPage_4B3170(MENUPAGE_PLAY);
                  break;
              default:
@@ -1414,7 +1449,7 @@ index d795ddf..49760ef 100644
                  break;
          }
          snd1_67D818.field_0_object_type = 6;
-@@ -2011,6 +2242,16 @@ void Frontend::UpdatePageFromUserInput_4AE2D0()
+@@ -2011,6 +2246,16 @@ void Frontend::UpdatePageFromUserInput_4AE2D0()
                      snd1_67D818.field_0_object_type = 3;
                  }
              }
@@ -1431,7 +1466,7 @@ index d795ddf..49760ef 100644
              pBorg = v18;
          }
          else if (field_132_f136_idx == MENUPAGE_PLAY)
-@@ -2053,6 +2294,16 @@ void Frontend::UpdatePageFromUserInput_4AE2D0()
+@@ -2053,6 +2298,16 @@ void Frontend::UpdatePageFromUserInput_4AE2D0()
                      snd1_67D818.field_0_object_type = 4;
                  }
              }
@@ -1448,7 +1483,7 @@ index d795ddf..49760ef 100644
              pBorg = v18;
          }
          else if (field_132_f136_idx == MENUPAGE_PLAY)
-@@ -3102,7 +3353,14 @@ void Frontend::DrawBackground_4B6E10()
+@@ -3102,7 +3357,14 @@ void Frontend::DrawBackground_4B6E10()
      }
      else
      {
@@ -1463,7 +1498,7 @@ index d795ddf..49760ef 100644
  
          // Left side
          s32 blitRet = pgbh_BlitImage(tgaArray_61F0C8[tga_idx].field_84_img, 0, 0, 278, 480, 0, 0);
-@@ -3228,10 +3486,26 @@ void Frontend::GetTgaIdxsForMenuScreen_4B6B00(u8 a1, BYTE* pTgaIdx, BYTE* a3)
+@@ -3228,10 +3490,26 @@ void Frontend::GetTgaIdxsForMenuScreen_4B6B00(u8 a1, BYTE* pTgaIdx, BYTE* a3)
      }
  }
  
@@ -1490,7 +1525,7 @@ index d795ddf..49760ef 100644
  
      FILE* hFile = crt::fopen(tgaArray_61F0C8[idx].field_0_tga_name, "rb");
      if (!hFile)
-@@ -3533,11 +3807,19 @@ void Frontend::SetupMenuStringsOptionsElements_4B0220()
+@@ -3533,11 +3811,19 @@ void Frontend::SetupMenuStringsOptionsElements_4B0220()
      wcsncpy(field_136_menu_pages_array[0].field_4_options_array[1].field_6_option_name_str,
              gText_0x14_704DFC->Find_5B5F90("options"),
              0x32u);
@@ -1510,7 +1545,7 @@ index d795ddf..49760ef 100644
      field_136_menu_pages_array[0].field_4_options_array[2].field_80_menu_page_target = 9;
      field_136_menu_pages_array[0].field_B8A[0].field_0 = 280;
      field_136_menu_pages_array[0].field_B8A[0].field_2 = 258;
-@@ -4085,6 +4367,55 @@ void Frontend::SetupMenuStringsOptionsElements_4B0220()
+@@ -4085,6 +4371,55 @@ void Frontend::SetupMenuStringsOptionsElements_4B0220()
      field_136_menu_pages_array[14].field_B8A[0].field_2 = 348; //  TODO: check for wrong var
      field_136_menu_pages_array[14].field_BC6_current_option_idx = 0;
      field_136_menu_pages_array[14].field_BC8_default_option_idx = 0;
@@ -1522,7 +1557,7 @@ index d795ddf..49760ef 100644
 +        pg.field_2_number_of_elements = N64_OPT_ROWS * 2;
 +        const char lg = gText_0x14_704DFC->field_10_lang_code;
 +        // the text comes from the .gxt of each language (assets/lang/menu.tsv, added by tools/lang_gxt.py)
-+        static const char_type* const kNames[N64_OPT_ROWS] = {"n64mus", "n64efx", "n64lang", "n64tod", "n64mode", "n64lim", "n64rmb", "n64pop", "n64traf"};
++        static const char_type* const kNames[N64_OPT_ROWS] = {"n64mus", "n64efx", "n64lang", "n64tod", "n64mode", "n64lim", "n64pop", "n64traf", "n64rmb"};
 +        for (s32 o = 0; o < N64_OPT_ROWS; o++)
 +        {
 +            menu_option_0x82& op = pg.field_4_options_array[o];
@@ -1532,7 +1567,7 @@ index d795ddf..49760ef 100644
 +            wcsncpy(op.field_6_option_name_str, gText_0x14_704DFC->Find_5B5F90(kNames[o]), 0x32u);
 +            op.field_6E_horizontal_selected_idx = (o == 2) ? (u16)N64_LangIdx(lg) : (o == 3 ? (u16)gta2_n64_get_lights() : (o == 4 ? (u16)gta2_n64_get_mode() : (o == 5 ? (u16)gta2_n64_get_fps_limit() : 10)));
 +            op.field_70 = 0;
-+            op.field_7E_horizontal_max_idx = (o >= 7) ? 2 : ((o >= 2) ? 1 : 10);
++            op.field_7E_horizontal_max_idx = (o == 6 || o == 7) ? 2 : ((o >= 2) ? 1 : 10);
 +            for (u16 k = 0; k <= op.field_7E_horizontal_max_idx; k++)
 +            {
 +                op.field_72_horizontal_idx_enabled[k] = 1;
@@ -1581,7 +1616,7 @@ index b09cf6b..5772db5 100644
      #define EXTERN_GLOBAL(type, name) extern type name
      #define EXTERN_GLOBAL_ARRAY(type, name, size) extern type name[size]
 diff --git a/Source/Game_0x40.cpp b/Source/Game_0x40.cpp
-index 355af99..d202dbe 100644
+index 355af99..cf1cefb 100644
 --- a/Source/Game_0x40.cpp
 +++ b/Source/Game_0x40.cpp
 @@ -375,6 +375,13 @@ void Game_0x40::DebugShowCarStatsAndFrameSkip_4B9270()
@@ -1664,8 +1699,11 @@ index 355af99..d202dbe 100644
      gCollisionSoundQueue_66AFE0->Reset_40BB90();
      gCollisionCounters_6791FC->ResetCount_478A20();
  
-@@ -492,10 +533,10 @@ void Game_0x40::UpdateGame_4B9410()
+@@ -490,12 +531,13 @@ void Game_0x40::UpdateGame_4B9410()
+     }
+ 
      gCranePool_D9C_679FD4->CranesService_480E50();
++
      gCrusherPool_94_67A830->CrushersService_4887F0();
      gGeneratorPool_14AC_67E5D0->GeneratorsService_4C1D70();
 -    gPedManager_6787BC->PedsService_4703F0();
@@ -1677,12 +1715,13 @@ index 355af99..d202dbe 100644
  
      if (bDo_mike_67D5CC)
      {
-@@ -507,11 +548,11 @@ void Game_0x40::UpdateGame_4B9410()
+@@ -507,15 +549,17 @@ void Game_0x40::UpdateGame_4B9410()
          gTrafficLights_194_705958->TrafficLightsService_5C2950(); // traffic lights
      }
  
 -    gObject_5C_6F8F84->ObjectsService_5293A0();
 +    N64_PROF_ZONE(10, gObject_5C_6F8F84->ObjectsService_5293A0());
++
  
      if (!bSkip_mission_67D4E5)
      {
@@ -1691,7 +1730,27 @@ index 355af99..d202dbe 100644
      }
  
      gEmergencyCrewPool_706280->ServiceAll_5CBBD0();
-@@ -580,7 +621,7 @@ s8 Game_0x40::ExecuteGame_4B9640()
+ 
++
+     if (!bSkip_ambulance_67D6C9)
+     {
+         gAmbulance_110_6F70A8->AmbulancesService_4FA790(); // ambulance
+@@ -533,12 +577,14 @@ void Game_0x40::UpdateGame_4B9410()
+ 
+     gTileAnim_2_7052C4->UpdateTileAnimations_5BC310();
+ 
++
+     if (bDo_show_timing_67D6DC)
+     {
+         gFpsCounter_7055D4->ShowFps_5BEC30();
+     }
+ 
+     gHud_2B00_706620->UpdateHUD_5D69D0();
++
+     gpRng_67AB34->AdvanceCycle_48B900(); // rng
+     gDoor_4D4_67BD2C->DoorsService_49D460();
+     gFirefighterPool_54_67D4C0->FireEnginesService_4A85F0(); // fire engines
+@@ -580,7 +626,7 @@ s8 Game_0x40::ExecuteGame_4B9640()
              UpdateGame_4B9410();
              if (!bSkip_audio_67D6BE)
              {
@@ -1700,7 +1759,7 @@ index 355af99..d202dbe 100644
              }
              break;
  
-@@ -933,7 +974,12 @@ void Game_0x40::ReduceTrafficSpawnCounterOfOtherViewers_4B9D60(Sprite* a2, Playe
+@@ -933,7 +979,12 @@ void Game_0x40::ReduceTrafficSpawnCounterOfOtherViewers_4B9D60(Sprite* a2, Playe
      }
  }
  
@@ -4357,10 +4416,55 @@ index 0000000..28b95cd
 +    Init_InputRecorder();
 +}
 diff --git a/Source/sound_obj.cpp b/Source/sound_obj.cpp
-index a8f76da..c0d8d04 100644
+index a8f76da..5f9a38b 100644
 --- a/Source/sound_obj.cpp
 +++ b/Source/sound_obj.cpp
-@@ -5731,7 +5731,7 @@ void sound_obj::HandlePedVoiceEvent_423080(Sound_Params_8* a2)
+@@ -5208,6 +5208,10 @@ void sound_obj::ProcessObject_Type12_41E850(Sound_Params_8* a2)
+ 
+ DEFINE_GLOBAL(u16, word_6758A8, 0x6758A8);
+ 
++#ifdef N64
++extern "C" u32 gta2_n64_sound_ms(void); // audio_n64.c
++#endif
++
+ MATCH_FUNC(0x41F520)
+ void sound_obj::ProcessOtherObjects_41F520(Sound_Params_8* a2)
+ {
+@@ -5239,10 +5243,33 @@ void sound_obj::ProcessOtherObjects_41F520(Sound_Params_8* a2)
+         case objects::red_phone_177:
+         case objects::yellow_phone_179:
+         case objects::green_phone_181:
++#ifdef N64
++            // The PC rings every 130 frames, 4.3 s at its 30 FPS. Counted in frames here, that was up to 10 s of silence at 13 FPS: goes by the clock
++            // instead. All the phones ring in the same frame, like on the PC, and the first time at once.
++            {
++                static u32 sRingFrame = 0xFFFFFFFFu, sRingMs;
++                static bool sRingNow;
++                if (sRingFrame != (u32)field_5448_m_FrameCounter)
++                {
++                    sRingFrame = (u32)field_5448_m_FrameCounter;
++                    const u32 now_ms = gta2_n64_sound_ms();
++                    sRingNow = sRingMs == 0 || now_ms - sRingMs >= 4333u;
++                    if (sRingNow)
++                    {
++                        sRingMs = now_ms | 1u;
++                    }
++                }
++                if (!sRingNow)
++                {
++                    return;
++                }
++            }
++#else
+             if (field_5448_m_FrameCounter % 130)
+             {
+                 return;
+             }
++#endif
+             rate_displacement = ((u32)a2 * 8) % 760;
+             samp_idx = 30;
+             volume = 85;
+@@ -5731,7 +5758,7 @@ void sound_obj::HandlePedVoiceEvent_423080(Sound_Params_8* a2)
      Char_B4* pB4 = a2->field_0_pObj->field_8_char_b4_ptr;
      Ped* pPed = pB4->field_7C_pPed;
      s32 voice = pPed->TakeVoiceEvent_41B0B0();
@@ -4631,7 +4735,7 @@ index 78c7432..2605bc5 100644
  
  // Only gets its EH frame when <new> isn't included, see Globals.hpp
 diff --git a/Source/winmain.cpp b/Source/winmain.cpp
-index a150294..1bd0e1d 100644
+index a150294..8237920 100644
 --- a/Source/winmain.cpp
 +++ b/Source/winmain.cpp
 @@ -1013,11 +1013,22 @@ EXPORT void __stdcall ApplyChangedScreenSettings_5D9690()
@@ -4728,7 +4832,7 @@ index a150294..1bd0e1d 100644
      u8 bQuit = 0; //  %bl
  
      while (1)
-@@ -2510,6 +2548,214 @@ s32 __stdcall WinMain_5E53F0(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR
+@@ -2510,6 +2548,218 @@ s32 __stdcall WinMain_5E53F0(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR
      return 0;
  }
  
@@ -4767,6 +4871,8 @@ index a150294..1bd0e1d 100644
 +}
 +extern "C" void gta2_port_forget_keys(); // dinput_n64.cpp
 +extern "C" void gta2_n64_release_hold(); // render_n64.c
++extern "C" void gta2_n64_show_loading(); // intro_n64.c
++extern "C" void gta2_ramfs_save_now(); // ramfs_n64.cpp
 +extern "C" s32 Gta2Port_RunLoopSlice()
 +{
 +    s32& state = sPortState_Gta2;
@@ -4782,8 +4888,10 @@ index a150294..1bd0e1d 100644
 +        if (bDoFrontEnd_626B68)
 +            {
 +                gta2_port_forget_keys();
++                gta2_n64_show_loading(); // the menu takes a while to load, and the scores of the game that ended are saved here
 +                Frontend::create_4ACFA0();
 +                gFrontend_67DC84->ChangeMenuPage_4B3170(state);
++                gta2_ramfs_save_now();
 +            }
 +            else
 +            {
@@ -4943,7 +5051,7 @@ index a150294..1bd0e1d 100644
  // TODO: order
  MATCH_FUNC(0x4DA740)
  EXPORT void __stdcall Shutdown_4DA740()
-@@ -2626,6 +2872,11 @@ EXPORT char_type __stdcall Start_NetworkGame_5E5A30(HINSTANCE hInstance)
+@@ -2626,6 +2876,11 @@ EXPORT char_type __stdcall Start_NetworkGame_5E5A30(HINSTANCE hInstance)
  MATCH_FUNC(0x5E5D60)
  EXPORT void __stdcall GetGTA2Version_5E5D60(s32* pVerMinor, s32* pVerMajor)
  {
@@ -4955,7 +5063,7 @@ index a150294..1bd0e1d 100644
      DWORD dwHandle;
      DWORD dwSize = GetFileVersionInfoSizeA("GTA2.EXE", &dwHandle);
      BYTE* pAlloc = new BYTE[dwSize];
-@@ -2639,4 +2890,5 @@ EXPORT void __stdcall GetGTA2Version_5E5D60(s32* pVerMinor, s32* pVerMajor)
+@@ -2639,4 +2894,5 @@ EXPORT void __stdcall GetGTA2Version_5E5D60(s32* pVerMinor, s32* pVerMajor)
          *pVerMajor = pFileInfo->dwProductVersionMS & 0xFFFF;
      }
      delete[] pAlloc;
@@ -4993,3 +5101,55 @@ index ce99424..818d57a 100644
                                                            zpos + kFpTwo_7055E0,
                                                            kAng180_705762);
          field_0_north_headlight_obj->SetSpriteIdOffset_5290C0(0);
+diff --git a/Source/ObjectDefinitions_8CA8.cpp b/Source/ObjectDefinitions_8CA8.cpp
+index 234cd32..c5cc599 100644
+--- a/Source/ObjectDefinitions_8CA8.cpp
++++ b/Source/ObjectDefinitions_8CA8.cpp
+@@ -346,6 +346,16 @@ void InitMapObjectOverrides()
+     printf("MapObjectOverride_54 array loaded!\n");
+ }
+ 
++// Tyre marks (and their copies, see CloneRemappedDefinitions_533C90): steps of game logic in each of their 4 phases. The PC's 45 keep
++// up to 360 on screen while a car spins, each one a sprite to update and two triangles to draw.
++#ifdef N64
++#ifndef N64_SKID_PHASE_STEPS
++#define N64_SKID_PHASE_STEPS 15
++#endif
++#else
++#define N64_SKID_PHASE_STEPS 45
++#endif
++
+ void InitCodeObjectTemplates()
+ {
+     gCodeObjectTemplates_6F9038[0] = CodeObjectTemplate_6C(149 ,1 ,0 ,0 ,0 ,0 ,0 ,0 ,0 ,kFpZeroForStaticInit_6FCE08 ,kFpZeroForStaticInit_6FCE08 ,0 ,1 ,1 ,4 ,0 ,0 ,kFpOne_6FCE0C ,kFpZeroForStaticInit_6FCE08 ,kFpZeroForStaticInit_6FCE08 ,kFpZeroForStaticInit_6FCE08 ,28 ,0 ,1 ,1 ,0 ,0 ,0 ,1);
+@@ -457,10 +467,10 @@ void InitCodeObjectTemplates()
+     gCodeObjectTemplates_6F9038[106] = CodeObjectTemplate_6C(281 ,1 ,0 ,282 ,0 ,1 ,11 ,13 ,4 ,kFpZeroForStaticInit_6FCE08 ,kFpZeroForStaticInit_6FCE08 ,0 ,1 ,1 ,4 ,0 ,0 ,kFpZeroForStaticInit_6FCE08 , kFpOne64th_6FCEB0 * Fix16(48) , kFpOne64th_6FCEB0 * Fix16(52) ,kFpZeroForStaticInit_6FCE08 ,10 ,0 ,0 ,1 ,0 ,1 ,0 ,1);
+     gCodeObjectTemplates_6F9038[107] = CodeObjectTemplate_6C(282 ,1 ,0 ,0 ,0 ,0 ,0 ,12 ,4 ,kFpZeroForStaticInit_6FCE08 ,kFpZeroForStaticInit_6FCE08 ,0 ,1 ,1 ,4 ,0 ,0 ,kFpZeroForStaticInit_6FCE08 , kFpOne64th_6FCEB0 * Fix16(48) ,kFpOne64th_6FCEB0 * Fix16(52) ,kFpZeroForStaticInit_6FCE08 ,10 ,0 ,0 ,1 ,0 ,0 ,0 ,1);
+     gCodeObjectTemplates_6F9038[108] = CodeObjectTemplate_6C(256 ,1 ,0 ,0 ,0 ,0 ,0 ,0 ,0 ,kFpZeroForStaticInit_6FCE08 ,kFpZeroForStaticInit_6FCE08 ,0 ,1 ,1 ,4 ,0 ,0 ,kFpZeroForStaticInit_6FCE08 ,kFpZeroForStaticInit_6FCE08 ,kFpZeroForStaticInit_6FCE08 ,kFpZeroForStaticInit_6FCE08 ,2 ,0 ,0 ,1 ,0 ,0 ,0 ,1);
+-    gCodeObjectTemplates_6F9038[109] = CodeObjectTemplate_6C(253 ,4 ,2 ,0 ,0 ,1 ,0 ,0 ,0 ,kFpZeroForStaticInit_6FCE08 ,kFpZeroForStaticInit_6FCE08 ,0 ,1 ,1 ,4 ,45 ,0 ,kFpZeroForStaticInit_6FCE08 ,kFpZeroForStaticInit_6FCE08 ,kFpZeroForStaticInit_6FCE08 ,kFpZeroForStaticInit_6FCE08 ,2 ,0 ,0 ,2 ,0 ,0 ,0 ,1);
+-    gCodeObjectTemplates_6F9038[110] = CodeObjectTemplate_6C(144 ,4 ,2 ,0 ,0 ,1 ,0 ,0 ,0 ,kFpZeroForStaticInit_6FCE08 ,kFpZeroForStaticInit_6FCE08 ,0 ,1 ,1 ,4 ,45 ,0 ,kFpZeroForStaticInit_6FCE08 ,kFpZeroForStaticInit_6FCE08 ,kFpZeroForStaticInit_6FCE08 ,kFpZeroForStaticInit_6FCE08 ,2 ,0 ,0 ,2 ,0 ,0 ,0 ,1);
+-    gCodeObjectTemplates_6F9038[111] = CodeObjectTemplate_6C(121 ,4 ,2 ,0 ,0 ,1 ,0 ,0 ,0 ,kFpZeroForStaticInit_6FCE08 ,kFpZeroForStaticInit_6FCE08 ,0 ,1 ,1 ,4 ,45 ,0 ,kFpZeroForStaticInit_6FCE08 ,kFpZeroForStaticInit_6FCE08 ,kFpZeroForStaticInit_6FCE08 ,kFpZeroForStaticInit_6FCE08 ,2 ,0 ,0 ,2 ,0 ,0 ,0 ,1);
+-    gCodeObjectTemplates_6F9038[112] = CodeObjectTemplate_6C(118 ,4 ,2 ,0 ,0 ,1 ,0 ,0 ,0 ,kFpZeroForStaticInit_6FCE08 ,kFpZeroForStaticInit_6FCE08 ,0 ,1 ,1 ,4 ,45 ,0 ,kFpZeroForStaticInit_6FCE08 ,kFpZeroForStaticInit_6FCE08 ,kFpZeroForStaticInit_6FCE08 ,kFpZeroForStaticInit_6FCE08 ,2 ,0 ,0 ,2 ,0 ,0 ,0 ,1);
++    gCodeObjectTemplates_6F9038[109] = CodeObjectTemplate_6C(253 ,4 ,2 ,0 ,0 ,1 ,0 ,0 ,0 ,kFpZeroForStaticInit_6FCE08 ,kFpZeroForStaticInit_6FCE08 ,0 ,1 ,1 ,4 ,N64_SKID_PHASE_STEPS ,0 ,kFpZeroForStaticInit_6FCE08 ,kFpZeroForStaticInit_6FCE08 ,kFpZeroForStaticInit_6FCE08 ,kFpZeroForStaticInit_6FCE08 ,2 ,0 ,0 ,2 ,0 ,0 ,0 ,1);
++    gCodeObjectTemplates_6F9038[110] = CodeObjectTemplate_6C(144 ,4 ,2 ,0 ,0 ,1 ,0 ,0 ,0 ,kFpZeroForStaticInit_6FCE08 ,kFpZeroForStaticInit_6FCE08 ,0 ,1 ,1 ,4 ,N64_SKID_PHASE_STEPS ,0 ,kFpZeroForStaticInit_6FCE08 ,kFpZeroForStaticInit_6FCE08 ,kFpZeroForStaticInit_6FCE08 ,kFpZeroForStaticInit_6FCE08 ,2 ,0 ,0 ,2 ,0 ,0 ,0 ,1);
++    gCodeObjectTemplates_6F9038[111] = CodeObjectTemplate_6C(121 ,4 ,2 ,0 ,0 ,1 ,0 ,0 ,0 ,kFpZeroForStaticInit_6FCE08 ,kFpZeroForStaticInit_6FCE08 ,0 ,1 ,1 ,4 ,N64_SKID_PHASE_STEPS ,0 ,kFpZeroForStaticInit_6FCE08 ,kFpZeroForStaticInit_6FCE08 ,kFpZeroForStaticInit_6FCE08 ,kFpZeroForStaticInit_6FCE08 ,2 ,0 ,0 ,2 ,0 ,0 ,0 ,1);
++    gCodeObjectTemplates_6F9038[112] = CodeObjectTemplate_6C(118 ,4 ,2 ,0 ,0 ,1 ,0 ,0 ,0 ,kFpZeroForStaticInit_6FCE08 ,kFpZeroForStaticInit_6FCE08 ,0 ,1 ,1 ,4 ,N64_SKID_PHASE_STEPS ,0 ,kFpZeroForStaticInit_6FCE08 ,kFpZeroForStaticInit_6FCE08 ,kFpZeroForStaticInit_6FCE08 ,kFpZeroForStaticInit_6FCE08 ,2 ,0 ,0 ,2 ,0 ,0 ,0 ,1);
+     gCodeObjectTemplates_6F9038[113] = CodeObjectTemplate_6C(295 ,8 ,2 ,0 ,0 ,1 ,0 ,0 ,0 ,kFpZeroForStaticInit_6FCE08 ,kFpZeroForStaticInit_6FCE08 ,-1 ,1 ,1 ,4 ,3 ,0 ,kFpZeroForStaticInit_6FCE08 ,kFpZeroForStaticInit_6FCE08 ,kFpZeroForStaticInit_6FCE08 ,kFpZeroForStaticInit_6FCE08 ,5 ,0 ,1 ,1 ,0 ,0 ,1 ,1);
+     gCodeObjectTemplates_6F9038[114] = CodeObjectTemplate_6C(128 ,1 ,3 ,0 ,0 ,1 ,7 ,0 ,1 ,kFpPoint4_6F8FE8 ,kFpZeroForStaticInit_6FCE08 ,50 ,1 ,1 ,4 ,0 ,0 ,kFpZeroForStaticInit_6FCE08 ,kFpZeroForStaticInit_6FCE08 ,kFpZeroForStaticInit_6FCE08 ,kFpZeroForStaticInit_6FCE08 ,28 ,4 ,1 ,1 ,1 ,1 ,0 ,1);
+     gCodeObjectTemplates_6F9038[115] = CodeObjectTemplate_6C(192 ,0 ,3 ,259 ,259 ,1 ,8 ,0 ,2 ,kFpPoint4_6F8FE8 ,kFpZeroForStaticInit_6FCE08 ,8 ,1 ,1 ,1 ,0 ,0 ,kFpZeroForStaticInit_6FCE08 ,kFpQuarter_6FCE60 ,kFpQuarter_6FCE60 ,kFpQuarter_6FCE60 ,0 ,0 ,1 ,1 ,1 ,0 ,0 ,1);
+diff --git a/Source/PublicTransport.cpp b/Source/PublicTransport.cpp
+index 9b72d26..876efdc 100644
+--- a/Source/PublicTransport.cpp
++++ b/Source/PublicTransport.cpp
+@@ -873,6 +873,11 @@ MATCH_FUNC(0x5794b0)
+ void PublicTransport_181C::SetupTrainAndBusStops_5794B0()
+ {
+     char Buffer[8];
++#ifdef N64
++    // Global, and it only went up: a second game on the same power-on went on walking past the end of the 100 stations of field_0_stations,
++    // so whatever memory followed was taken for bus stops.
++    gStationCount_6FF1CC = 0;
++#endif
+     byte_6FF1CD = 0;
+     dword_6FF1D0 = 0;
+     if (!bSkip_trains_67D550)

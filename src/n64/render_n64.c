@@ -55,6 +55,22 @@ static int g_ublk_npend;
 static rspq_block_t *g_ublk[CACHE_N];
 static uint8_t g_ublk_n[CACHE_N];
 static int g_ublk_live;
+/* Recorded text no longer valid: like the upload blocks, the RSP may not have run it yet, and its memory would be recorded over by the next block */
+#define BLK_OLD_N 16
+static rspq_block_t *g_blk_old[BLK_OLD_N];
+static uint32_t g_blk_old_f[BLK_OLD_N];
+static int g_blk_nold;
+static void blk_retire(rspq_block_t *b)
+{
+    if (g_blk_nold >= BLK_OLD_N) {
+        rspq_wait();
+        for (int i = 0; i < g_blk_nold; ++i) rspq_block_free(g_blk_old[i]);
+        g_blk_nold = 0;
+    }
+    g_blk_old[g_blk_nold] = b;
+    g_blk_old_f[g_blk_nold] = g_frames;
+    ++g_blk_nold;
+}
 /* Blocks given up are reused for the next uploads, which are all about the same size, instead of going back to the heap. A slot is reconverted many
  * times a second in an explosion: creating and freeing a block each time was nearly all the allocation during play (10000 in one session), and
  * it left the heap with 440 KB free in pieces of 23 KB. They are only freed when none is alive, that is, on a level change. */
@@ -108,6 +124,14 @@ static int heap_has_room(void)
 }
 static void ublk_reap(void)
 {
+    for (int i = 0; i < g_blk_nold; ) {
+        if ((uint32_t)(g_frames - g_blk_old_f[i]) >= 4u) {
+            rspq_block_free(g_blk_old[i]);
+            --g_blk_nold;
+            g_blk_old[i] = g_blk_old[g_blk_nold];
+            g_blk_old_f[i] = g_blk_old_f[g_blk_nold];
+        } else ++i;
+    }
     for (int i = 0; i < g_ublk_npend; ) {
         if ((uint32_t)(g_frames - g_ublk_pend_f[i]) >= 4u) {
             ublk_retire(g_ublk_pend[i]);
@@ -824,7 +848,7 @@ static void blk_run(const FCmd *cm, int n, const FVert *verts, float sx, float s
 
         return;
     }
-    if (b->blk) { rspq_block_free(b->blk); b->blk = NULL; }
+    if (b->blk) { blk_retire(b->blk); b->blk = NULL; }
     /* only records if all commands use valid texture tokens (no conversion/wait inside the block) */
     int ndep = 0;
     int dslot[BLK_DEP];

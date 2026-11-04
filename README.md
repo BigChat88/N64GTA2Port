@@ -108,6 +108,8 @@ Compile-time tuning, passed as `EXTRA_CFLAGS="-DNAME=value ..."`. These require 
 | `N64_CAM_ZOOM_QUALITY_PCT` | `116` | Camera height in quality mode. Higher = closer to the ground and faster |
 | `N64_CAM_ZOOM_PERF_PCT` | `126` | Camera height in performance mode |
 | `N64_KF_PED_PCT` | `100` | Pedestrians during a kill frenzy, as a percentage of the PC amount. Otherwise chosen on the Options page: pedestrians 35 / 40 / 50%, traffic 40 / 50 / 60% |
+| `N64_SKID_MAX` | `120` | Tyre marks alive at the same time. A car spinning on the spot reaches the limit: each mark is a sprite (engine limit: 360) |
+| `N64_SKID_PHASE_STEPS` | `15` | How long tyre marks last: game logic steps in each of their 4 phases (`45` = as on PC) |
 | `N64_DEBUG_OVERLAY` | `0` | `1` shows FPS, free RAM, the save system, the pedestrian counts, the sound counters and the frame counters (`skip`: frames with no image; `low`: game frames with almost nothing; `long`: gaps of 0.5 s or more) on screen |
 | `N64_HUD_SCALE` | `1.25f` | Size of the HUD markers: bars, hearts, money, wanted level (`1.0f` = as on PC) |
 | `N64_PAGER_SCALE` | `1.5f` | Size of the pagers: mission clock and counter (`1.0f` = as on PC) |

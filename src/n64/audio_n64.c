@@ -351,6 +351,9 @@ static void voice_fade_out(int ch)
     g_voice[ch].fade_end = g_mixed + SFX_DECLICK;
 }
 
+/* for what the game times in frames but must keep its real length at any frame rate (the phones in sound_obj.cpp) */
+uint32_t gta2_n64_sound_ms(void) { return (uint32_t)get_ticks_ms(); }
+
 /* feeds the AI: called a few times per frame (render_n64.c) */
 void gta2_n64_audio_poll(void)
 {

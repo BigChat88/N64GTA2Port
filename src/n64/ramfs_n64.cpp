@@ -223,23 +223,8 @@ extern "C" void gta2_ramfs_status(int* flash, int* files, int* dirty, int* store
     *failed = gFailed;
 }
 
-// Once per game frame: saves what changed, once the engine has not closed a written file for a moment.
-extern "C" void gta2_ramfs_tick(void)
+static void SaveChanged(void)
 {
-    if (!gFlash)
-    {
-        return;
-    }
-    if (gRetryFrames > 0)
-    {
-        --gRetryFrames;
-        return;
-    }
-    if (++gQuietFrames < kFramesBeforeSaving)
-    {
-        return;
-    }
-    gQuietFrames = kFramesBeforeSaving;
     for (auto& e : gFiles)
     {
         RamFile& f = *e.second;
@@ -259,5 +244,34 @@ extern "C" void gta2_ramfs_tick(void)
         gLastPacked = gta2_savefs_used() > usedBefore ? gta2_savefs_used() - usedBefore : 0;
         f.dirty = false;
         Unload(f);
+    }
+}
+
+// Once per game frame: saves what changed, once the engine has not closed a written file for a moment.
+extern "C" void gta2_ramfs_tick(void)
+{
+    if (!gFlash)
+    {
+        return;
+    }
+    if (gRetryFrames > 0)
+    {
+        --gRetryFrames;
+        return;
+    }
+    if (++gQuietFrames < kFramesBeforeSaving)
+    {
+        return;
+    }
+    gQuietFrames = kFramesBeforeSaving;
+    SaveChanged();
+}
+
+// Saves now: writing the FlashRAM stops the game, so it is done behind the loading screen and not on the menu page that comes next.
+extern "C" void gta2_ramfs_save_now(void)
+{
+    if (gFlash && gRetryFrames == 0)
+    {
+        SaveChanged();
     }
 }

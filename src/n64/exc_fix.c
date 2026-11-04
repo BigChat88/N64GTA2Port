@@ -43,6 +43,11 @@ static int fix_insn(const exception_t *ex, reg_block_t *r, uint32_t insn, uint32
         {
             return 0;
         }
+        // A bad pointer, not a misaligned one: reading it here would fault again and hide the real place from the crash screen.
+        if (addr < 0x80000000u || addr >= 0xC0000000u)
+        {
+            return 0;
+        }
         uint8_t *fpr = (uint8_t *)&r->fpr[rt];
         switch (op)
         {
