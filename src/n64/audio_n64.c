@@ -196,6 +196,22 @@ static Wave *wave_get(const void *data, uint32_t len, int loops, int32_t ls, int
 }
 
 
+/* The mixer creates a channel's buffers the first time it plays: playing nothing now places them at the bottom of the heap too */
+static void silence_read(void *ctx, samplebuffer_t *sbuf, int wpos, int wlen, bool seeking)
+{
+    (void)ctx; (void)sbuf; (void)wpos; (void)wlen; (void)seeking;
+}
+void gta2_n64_audio_init(void);
+void gta2_n64_audio_reserve(void)
+{
+    gta2_n64_audio_init();
+    static waveform_t w = { .name = "reserve", .bits = 16, .channels = 1, .frequency = OUT_FREQ, .len = 16, .read = silence_read };
+    for (int c = 0; c < NVOICE + NSTREAM; ++c) {
+        mixer_ch_play(c, &w);
+        mixer_ch_stop(c);
+    }
+}
+
 void gta2_n64_fx_pool_init(void)
 {
     g_fxpool = (uint8_t *)memalign(16, FXCACHE_MAX); /* if it fails, every sound plays from ROM */

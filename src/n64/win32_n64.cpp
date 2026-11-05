@@ -141,9 +141,15 @@ void OutputDebugStringA(LPCSTR s)
 {
     fputs(s, stderr);
 }
+#if N64_DEBUG_OVERLAY
+extern "C" void gta2_n64_fatal_screen(const char* caption, const char* text); // render_n64.c
+#endif
 int MessageBoxA(HWND, LPCSTR text, LPCSTR caption, UINT)
 {
     fprintf(stderr, "[MessageBox] %s: %s\n", caption ? caption : "", text ? text : "");
+#if N64_DEBUG_OVERLAY
+    gta2_n64_fatal_screen(caption ? caption : "", text ? text : ""); // on a console nothing else shows it: the image just freezes
+#endif
     return IDOK;
 }
 HRESULT CoInitialize(LPVOID)

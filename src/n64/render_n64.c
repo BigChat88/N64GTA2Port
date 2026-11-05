@@ -171,8 +171,18 @@ void gta2_prof_add(int which, uint32_t t0) { g_prof[which] += TICKS_READ() - t0;
 #define PC_TOP 8
 #define PC_MEM_TOP 3
 static uint16_t g_pc_hist[PC_BUCKETS], g_pc_mem_hist[PC_BUCKETS];
+/* On a console a fatal error of the engine would just freeze the image */
+void gta2_n64_fatal_screen(const char *caption, const char *text)
+{
+    long big_kb = 5120;
+    for (; big_kb > 0; big_kb -= 8) { void *volatile p = malloc((size_t)big_kb * 1024); if (p) { free(p); break; } }
+    const long free_kb = ((long)(__heap_top - (char *)sbrk(0)) + (long)mallinfo().fordblks) / 1024;
+    assertf(0, "%s\n%s\nfree %ldK biggest %ldK", caption, text, free_kb, big_kb);
+}
 static uint32_t g_pc_total;
 static timer_link_t *g_pc_timer;
+#define PC_HANG_SAMPLES 30000u
+static volatile uint32_t g_pc_no_frame;
 static char g_pc_text[(PC_TOP + PC_MEM_TOP + 1) * 12 + 1];
 static void pc_sample(int ovfl)
 {
@@ -180,6 +190,11 @@ static void pc_sample(int ovfl)
     extern void *interrupt_exception_frame;
     const uint32_t pc = ((const reg_block_t *)((const char *)interrupt_exception_frame + 32))->epc - 0x80000000u;
     if (pc < 0x300000u) ++g_pc_hist[pc >> PC_BUCKET_SHIFT];
+    /* no frame for this long: shows where the CPU is on the crash screen, for the debug ROM's .elf */
+    if (++g_pc_no_frame > PC_HANG_SAMPLES) {
+        g_pc_no_frame = 0;
+        assertf(0, "Hang: no frame for 30 s\npc %08lX ra %08lX", (unsigned long)(pc + 0x80000000u), (unsigned long)(uint32_t)((const reg_block_t *)((const char *)interrupt_exception_frame + 32))->gpr[31]);
+    }
     /* both are leaf functions: ra is who called them. Sizes from the .elf */
     const uint32_t ms = (uint32_t)(uintptr_t)memset - 0x80000000u, mc = (uint32_t)(uintptr_t)memcpy - 0x80000000u;
     if (pc - ms < 284u || pc - mc < 880u) {
@@ -208,14 +223,12 @@ static void pc_report(void)
 {
     if (!g_pc_timer) g_pc_timer = new_timer(TICKS_FROM_US(997), TF_CONTINUOUS, pc_sample);
     if (g_pc_total < PC_WINDOW) return;
-    disable_interrupts();
-    int w = pc_print(0, g_pc_hist, PC_TOP);
+    int w = pc_print(0, g_pc_hist, PC_TOP); /* interrupts stay on, or this would delay the flip of the framebuffers: a late sample does no harm */
     w += snprintf(g_pc_text + w, sizeof g_pc_text - (size_t)w, "mem\n");
     pc_print(w, g_pc_mem_hist, PC_MEM_TOP);
     memset(g_pc_hist, 0, sizeof g_pc_hist);
     memset(g_pc_mem_hist, 0, sizeof g_pc_mem_hist);
     g_pc_total = 0;
-    enable_interrupts();
 }
 static void prof_frame_end(void)
 {
@@ -944,10 +957,46 @@ static int s_hold_until_menu;
 void gta2_n64_hold_until_menu(void) { s_hold_until_menu = 1; }
 void gta2_n64_release_hold(void) { s_hold_until_menu = 0; }
 
+/* Runs on the VI interrupt just before the flip, so the origin it reads is the framebuffer shown during the field that is ending */
+static volatile uint32_t s_vblanks;
+#define FB_SEEN_N 4
+static struct { uint32_t origin; volatile uint32_t last; } s_fb_seen[FB_SEEN_N];
+static void vblank_tick(void)
+{
+    const uint32_t now = ++s_vblanks, origin = *VI_ORIGIN & 0xFFFFFFu;
+    for (int i = 0; i < FB_SEEN_N; ++i) {
+        if (s_fb_seen[i].origin == origin || s_fb_seen[i].origin == 0) { s_fb_seen[i].origin = origin; s_fb_seen[i].last = now; return; }
+    }
+}
+
+/* A frame starts with a black fill. Blanking a framebuffer the flip has only just released can show as a black line across one frame,
+ * so it is left alone until the next field has started. In a game slower than the display the flip is usually long past by now. */
+static surface_t *frame_buffer_get(void)
+{
+    surface_t *fb = display_get();
+    const uint32_t origin = (uint32_t)PhysicalAddr(fb->buffer) & 0xFFFFFFu;
+    for (int i = 0; i < FB_SEEN_N; ++i) {
+        if (s_fb_seen[i].origin == origin) { while (s_vblanks == s_fb_seen[i].last) { } break; }
+    }
+    return fb;
+}
+
+/* What stays for the whole session goes first, at the bottom of the heap. Created later, each block lands after whatever the first menu and
+ * game loaded, and when those are freed the RAM stays cut in pieces: 3.5 MB free in total, but a game could no longer be loaded. */
+void gta2_n64_render_reserve(void)
+{
+    extern void gta2_n64_audio_reserve(void); /* audio_n64.c */
+    rdpq_init();
+    gta2_n64_audio_reserve();
+    g_cbuf = (uint16_t *)memalign(64, (size_t)CACHE_N * SLOT_U16 * 2);
+    if (g_cbuf) memset(g_c, 0, sizeof(g_c));
+}
+
 void gta2_n64_present(const void *cmds_, int cmdCount, const void *verts_, int vertCount, int refWidth)
 {
     static int inited;
     if (!inited) {
+        register_VI_handler(vblank_tick);
         rdpq_init();
         gta2_n64_audio_init(); /* after rdpq_init: the mixer uses the RSP queue */
         inited = 1;
@@ -964,6 +1013,7 @@ void gta2_n64_present(const void *cmds_, int cmdCount, const void *verts_, int v
 
     PROF_TIME(PROF_AUDIO, gta2_n64_audio_poll());
 #if N64_DEBUG_OVERLAY
+    g_pc_no_frame = 0;
     /* to tell what a lost image was: frames not shown for having no image, game frames with almost nothing, gaps of 0.5 s or more */
     static unsigned s_dbg_empty, s_dbg_low, s_dbg_long;
     static uint32_t s_dbg_last_ms;
@@ -992,7 +1042,7 @@ void gta2_n64_present(const void *cmds_, int cmdCount, const void *verts_, int v
     extern void gta2_n64_update_video_mode(void); /* main_n64.c */
     gta2_n64_update_video_mode();
     surface_t *disp;
-    PROF_TIME(PROF_WAIT, disp = display_get());
+    PROF_TIME(PROF_WAIT, disp = frame_buffer_get());
     SCR_W = (float)disp->width;
     SCR_H = (float)disp->height;
     const int IW = (int)disp->width, IH = (int)disp->height;

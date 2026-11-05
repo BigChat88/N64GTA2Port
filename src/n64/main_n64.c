@@ -254,6 +254,8 @@ int main(void)
 
     extern void gta2_n64_fx_pool_init(void); /* audio_n64.c */
     gta2_n64_fx_pool_init(); /* before the engine: the block stays at the bottom of the heap and splits nothing it asks for later */
+    extern void gta2_n64_render_reserve(void); /* render_n64.c */
+    gta2_n64_render_reserve(); /* the same for the renderer and the mixer */
 
     const int rc = gta2_game_init();
     if (rc != 0)
