@@ -566,4 +566,10 @@ uint32_t gta2_port_present_count()
     return gPresents;
 }
 
+void gta2_frame_reserve(void)
+{
+    ensureRoom(gVerts, 1);
+    ensureRoom(gCmds, 1);
+}
+
 } // extern "C"

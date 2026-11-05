@@ -64,6 +64,10 @@ void SeedRegistry()
 bool gStarted = false;
 } // namespace
 
+extern "C" void gta2_frame_reserve(void);             // frame_n64.cpp
+extern "C" void gta2_n64_palettes_reserve(int n);     // gbh_n64.cpp
+extern "C" void gta2_text_reserve(void);              // text_0x14.cpp
+
 // 0 = running; != 0 = the game ended during initialization (exit code).
 extern "C" int gta2_game_init(void)
 {
@@ -71,6 +75,10 @@ extern "C" int gta2_game_init(void)
     gta2_settings_load();
     SeedRegistry();
     Gta2Port_StaticInit(); // what the original CRT start-up did
+    // What stays for the whole session, at the bottom of the heap: see gta2_n64_render_reserve
+    gta2_frame_reserve();
+    gta2_n64_palettes_reserve(512); // the cities have 320
+    gta2_text_reserve();
     static char cmd[4] = "";
     const int r = WinMain_5E53F0(reinterpret_cast<HINSTANCE>(0x400000), nullptr, cmd, SW_SHOWNORMAL);
     if (r != kRunning)

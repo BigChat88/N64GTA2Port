@@ -110,7 +110,7 @@ Compile-time tuning, passed as `EXTRA_CFLAGS="-DNAME=value ..."`. These require 
 | `N64_KF_PED_PCT` | `100` | Pedestrians during a kill frenzy, as a percentage of the PC amount. Otherwise chosen on the Options page: pedestrians 35 / 40 / 50%, traffic 40 / 50 / 60% |
 | `N64_SKID_MAX` | `120` | Tyre marks alive at the same time. A car spinning on the spot reaches the limit: each mark is a sprite (engine limit: 360) |
 | `N64_SKID_PHASE_STEPS` | `15` | How long tyre marks last: game logic steps in each of their 4 phases (`45` = as on PC) |
-| `N64_DEBUG_OVERLAY` | `0` | `1` shows FPS, free RAM, the save system, the pedestrian counts, the sound counters and the frame counters (`skip`: frames with no image; `low`: game frames with almost nothing; `long`: gaps of 0.5 s or more) on screen, plus the busiest pieces of code (address and % of the CPU time) and, under `mem`, the code that spends the most time in `memset` and `memcpy` |
+| `N64_DEBUG_OVERLAY` | `0` | `1` shows FPS, free RAM, the save system, the pedestrian counts, the sound counters and the frame counters (`skip`: frames with no image; `low`: game frames with almost nothing; `long`: gaps of 0.5 s or more) on screen, plus the busiest pieces of code (address and % of the CPU time) and, under `mem`, the code that spends the most time in `memset` and `memcpy`. A fatal error of the engine, or 30 s with no frame, stops on a crash screen that says why |
 | `N64_HUD_SCALE` | `1.25f` | Size of the HUD markers: bars, hearts, money, wanted level (`1.0f` = as on PC) |
 | `N64_PAGER_SCALE` | `1.5f` | Size of the pagers: mission clock and counter (`1.0f` = as on PC) |
 | `N64_HUD_INSET_LEFT` / `_RIGHT` / `_TOP` | `8.0f` / `16.0f` / `6.0f` | Distance of the HUD markers from the screen edges |

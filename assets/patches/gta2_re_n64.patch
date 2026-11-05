@@ -4221,7 +4221,7 @@ index 77547b6..e2d599b 100644
      void* pAlloc = crt::malloc(requestedSize + 0x10000);
  
 diff --git a/Source/miss2_0x11C.cpp b/Source/miss2_0x11C.cpp
-index 524e193..abe4f86 100644
+index 524e193..5435a33 100644
 --- a/Source/miss2_0x11C.cpp
 +++ b/Source/miss2_0x11C.cpp
 @@ -1720,8 +1720,8 @@ MATCH_FUNC(0x506a60)
@@ -4249,9 +4249,9 @@ index 524e193..abe4f86 100644
  }
  
 +#ifdef N64
-+// Bank Robbery (wil_ye2): the original script waits at this command for Hiroshi to reach the car, and checks whether the player died but not
-+// him, so the mission never ended once he was dead. Goes to the mission's own failure branch. The other commands are checked because
-+// other missions use the same numbers: 1652 shows "What about Hiroshi?" and 1642 opens that branch.
++// Bank Robbery (wil_ye2): the original script waits at this command for Hiroshi to walk to a point inside the bank, and checks whether the player
++// died but not him, so the mission never ended once he was dead. Goes to the mission's own failure branch. The other commands are checked
++// because other missions use the same numbers: 1652 shows "What about Hiroshi?" and 1642 opens that branch.
 +static bool N64_IsHiroshiDead(s32 cmd, u16 charIdx, Ped* pPed)
 +{
 +    if (cmd != 1638 || charIdx != 1373 || !pPed || pPed->field_278_ped_state_1 != ped_state_1::dead_9)
@@ -4688,7 +4688,7 @@ index 263f693..ccb0ec8 100644
  EXTERN_GLOBAL(Sprite_8*, gSprite_8_703820);
  
 diff --git a/Source/text_0x14.cpp b/Source/text_0x14.cpp
-index 78c7432..2605bc5 100644
+index 78c7432..90f818c 100644
 --- a/Source/text_0x14.cpp
 +++ b/Source/text_0x14.cpp
 @@ -1,4 +1,5 @@
@@ -4697,13 +4697,14 @@ index 78c7432..2605bc5 100644
  #include "Function.hpp"
  #include "chunk.hpp"
  #include "error.hpp"
-@@ -82,12 +83,36 @@ void text_0x14::RemapExtendedChars_5B5930(wchar_t* pStr)
+@@ -82,12 +83,38 @@ void text_0x14::RemapExtendedChars_5B5930(wchar_t* pStr)
      }
  }
  
 +#ifdef N64
-+// The text of a language takes a single block of over 300 KB. Freeing it and asking for another one when the language changes could fail, however
-+// much RAM was free in smaller pieces, so the blocks stay and are reused: they are created with room for the longest language.
++// The text of a language takes a single block of over 300 KB, and each menu and game creates its own text object. Freeing the block and asking for
++// another one leaves a hole: a longer language does not fit in it, and goes elsewhere, cutting the free RAM in pieces too small to load a map. So
++// the blocks outlive the objects and are reused: they are created once, with room for the longest language.
 +// nothrow: only with it can the compiler not assume that new succeeded, and the test after it stays in the code.
 +#define N64_TEXT_SPARE_KEYS 64u
 +#define N64_TEXT_SPARE_BYTES (16u * 1024u)
@@ -4719,40 +4720,43 @@ index 78c7432..2605bc5 100644
      // TODO: probably an inline
      field_0_tKey.field_4_tKey_count = chunkSize / sizeof(text_0xC);
 +#ifdef N64
-+    // Changing language reads over the same block (see N64_TextFits)
++    static text_0xC* sBlock;
 +    static u32 sCapacity;
-+    if (!N64_TextFits(chunkSize, sCapacity, field_0_tKey.field_0_tKey != NULL))
++    if (!N64_TextFits(chunkSize, sCapacity, sBlock != NULL))
 +    {
-+        delete[] field_0_tKey.field_0_tKey;
++        delete[] sBlock;
 +        sCapacity = field_0_tKey.field_4_tKey_count + N64_TEXT_SPARE_KEYS;
-+        field_0_tKey.field_0_tKey = new (std::nothrow) text_0xC[sCapacity];
++        sBlock = new (std::nothrow) text_0xC[sCapacity];
 +        sCapacity *= sizeof(text_0xC);
 +    }
++    field_0_tKey.field_0_tKey = sBlock;
 +#else
      field_0_tKey.field_0_tKey = new text_0xC[field_0_tKey.field_4_tKey_count];
 +#endif
      if (!field_0_tKey.field_0_tKey)
      {
          FatalError_4A38C0(Gta2Error::OutOfMemoryNewOperator, "C:\\Splitting\\Gta2\\Source\\text.cpp", 218);
-@@ -152,7 +177,17 @@ MATCH_FUNC(0x5B5A80)
+@@ -152,7 +179,19 @@ MATCH_FUNC(0x5B5A80)
  void text_tdat::TDAT_Load_5B5A80(u32 size)
  {
      field_4_len = size / sizeof(wchar_t);
 +#ifdef N64
++    static BYTE* sBlock; // see N64_TextFits
 +    static u32 sCapacity;
-+    if (!N64_TextFits(size, sCapacity, field_0_data != NULL))
++    if (!N64_TextFits(size, sCapacity, sBlock != NULL))
 +    {
-+        delete[] field_0_data;
++        delete[] sBlock;
 +        sCapacity = size + N64_TEXT_SPARE_BYTES;
-+        field_0_data = new (std::nothrow) BYTE[sCapacity];
++        sBlock = new (std::nothrow) BYTE[sCapacity];
 +    }
++    field_0_data = sBlock;
 +#else
      field_0_data = new BYTE[field_4_len * sizeof(wchar_t)];
 +#endif
  
      if (!field_0_data)
      {
-@@ -198,7 +233,11 @@ u16 text_0x14::ToUpper_5B5AD0(wchar_t a2)
+@@ -198,7 +237,11 @@ u16 text_0x14::ToUpper_5B5AD0(wchar_t a2)
              }
              if (a2 >= 0x80 && a2 <= 0xFF)
              {
@@ -4764,7 +4768,7 @@ index 78c7432..2605bc5 100644
              }
              break;
      }
-@@ -395,6 +434,13 @@ bool text_0x14::KeyExists_5B5FA0(const char_type* pIdStr)
+@@ -395,6 +438,13 @@ bool text_0x14::KeyExists_5B5FA0(const char_type* pIdStr)
      return TKeyFind_5B59E0(pIdStr);
  }
  
@@ -4778,7 +4782,7 @@ index 78c7432..2605bc5 100644
  MATCH_FUNC(0x5B5FB0)
  text_0x14::text_0x14()
  {
-@@ -409,6 +455,9 @@ text_0x14::text_0x14()
+@@ -409,10 +459,22 @@ text_0x14::text_0x14()
      {
          field_10_lang_code = 'e';
      }
@@ -4788,6 +4792,21 @@ index 78c7432..2605bc5 100644
  }
  
  // Only gets its EH frame when <new> isn't included, see Globals.hpp
+ MATCH_FUNC(0x5B6050)
+ text_0x14::~text_0x14()
+ {
+-}
+\ No newline at end of file
++}
++
++#ifdef N64
++// At boot, so that the blocks of the text stay at the bottom of the heap (see N64_TextFits).
++extern "C" void gta2_text_reserve(void)
++{
++    text_0x14 text;
++    text.Load_5B5E90();
++}
++#endif
 diff --git a/Source/winmain.cpp b/Source/winmain.cpp
 index a150294..8237920 100644
 --- a/Source/winmain.cpp
@@ -5207,3 +5226,33 @@ index 9b72d26..876efdc 100644
      byte_6FF1CD = 0;
      dword_6FF1D0 = 0;
      if (!bSkip_trains_67D550)
+diff --git a/Source/text_0x14.hpp b/Source/text_0x14.hpp
+index c6ded84..212d284 100644
+--- a/Source/text_0x14.hpp
++++ b/Source/text_0x14.hpp
+@@ -21,10 +21,12 @@ class text_tdat
+ 
+     ~text_tdat() // inline 0x4C2430
+     {
++#ifndef N64 // the block outlives the object: see TDAT_Load_5B5A80
+         if (field_0_data)
+         {
+             delete[] field_0_data;
+         }
++#endif
+         field_0_data = 0;
+     }
+     BYTE* field_0_data;
+@@ -43,10 +45,12 @@ public:
+ 
+     ~text_tkey() // inline 0x4C2400
+     {
++#ifndef N64 // the block outlives the object: see TKEY_Load_5B5960
+         if (field_0_tKey)
+         {
+             delete[] field_0_tKey;
+         }
++#endif
+         field_0_tKey = 0;
+     }
+     text_0xC* field_0_tKey;
